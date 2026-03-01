@@ -225,10 +225,19 @@ export default function App() {
                 setSpotifyLoading(true);
                 try {
                     if (currentTrack) {
-                        const searchQuery = musicMode
-                            ? `${currentTrack.name} ${currentTrack.artist} instrumental`
-                            : `${currentTrack.name} ${currentTrack.artist}`;
-                        const uri = await spotify.searchTrack(searchQuery, '');
+                        // Try multiple search strategies for instrumental
+                        const queries = musicMode
+                            ? [
+                                `${currentTrack.name} karaoke`,
+                                `${currentTrack.name} instrumental`,
+                                `${currentTrack.name} backing track`,
+                            ]
+                            : [`${currentTrack.name} ${currentTrack.artist}`];
+                        let uri: string | null = null;
+                        for (const q of queries) {
+                            uri = await spotify.searchTrack(q, '');
+                            if (uri) break;
+                        }
                         if (uri) await spotify.play(uri);
                         else spotify.resume();
                     } else {
@@ -251,10 +260,19 @@ export default function App() {
         (async () => {
             setSpotifyLoading(true);
             try {
-                const q = musicMode
-                    ? `${currentTrack.name} ${currentTrack.artist} instrumental`
-                    : `${currentTrack.name} ${currentTrack.artist}`;
-                const uri = await spotify.searchTrack(q, '');
+                // Try multiple search strategies for instrumental versions
+                const queries = musicMode
+                    ? [
+                        `${currentTrack.name} karaoke`,
+                        `${currentTrack.name} instrumental`,
+                        `${currentTrack.name} backing track`,
+                    ]
+                    : [`${currentTrack.name} ${currentTrack.artist}`];
+                let uri: string | null = null;
+                for (const q of queries) {
+                    uri = await spotify.searchTrack(q, '');
+                    if (uri && !cancelled) break;
+                }
                 if (uri && !cancelled) await spotify.play(uri);
             } catch { /* ignore */ }
             if (!cancelled) setSpotifyLoading(false);
@@ -489,10 +507,13 @@ export default function App() {
                     <KeyBadge keys={['tab']} /> <span style={{ color: C.sub }}>+</span>
                     <KeyBadge keys={['space']} />
                     <span className="text-xs" style={{ color: C.sub }}>— new song</span>
+                    <span className="mx-2" style={{ color: C.border }}>|</span>
+                    <KeyBadge keys={['/']} />
+                    <span className="text-xs" style={{ color: C.sub }}>— search</span>
                 </div>
             </footer>
 
-            <KeyboardShortcuts onRestart={handleRestart} onNewSong={handleNewSong} />
+            <KeyboardShortcuts onRestart={handleRestart} onNewSong={handleNewSong} onSearch={() => { setTimeout(() => searchInputRef.current?.focus(), 0); }} />
         </div>
     );
 }
@@ -642,19 +663,22 @@ function TypingRenderer({
     );
 }
 
-function KeyboardShortcuts({ onRestart, onNewSong }: { onRestart: () => void, onNewSong: () => void }) {
+function KeyboardShortcuts({ onRestart, onNewSong, onSearch }: { onRestart: () => void, onNewSong: () => void, onSearch?: () => void }) {
     const tabRef = useRef(false);
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            if (target.tagName === 'INPUT') return;
             if (e.key === 'Tab') { e.preventDefault(); tabRef.current = true; }
             if (e.key === 'Escape') { e.preventDefault(); onNewSong(); }
             if (e.key === 'Enter' && tabRef.current) { e.preventDefault(); onRestart(); tabRef.current = false; }
             if (e.key === ' ' && tabRef.current) { e.preventDefault(); onNewSong(); tabRef.current = false; }
+            if (e.key === '/' && onSearch) { e.preventDefault(); onSearch(); }
         };
         const up = (e: KeyboardEvent) => { if (e.key === 'Tab') tabRef.current = false; };
         window.addEventListener('keydown', down);
         window.addEventListener('keyup', up);
         return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-    }, [onRestart, onNewSong]);
+    }, [onRestart, onNewSong, onSearch]);
     return null;
 }
