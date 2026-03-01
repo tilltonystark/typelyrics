@@ -73,8 +73,5 @@ export function getAverageWpm(): number {
 }
 
 export function getModePreference(): TypingMode | null {
-    const events = getStoredEvents().filter(e => e.type === 'mode_select');
-    if (events.length === 0) return null;
-    const flowCount = events.filter(e => (e.data as { mode: string }).mode === 'flow').length;
-    return flowCount > events.length / 2 ? 'flow' : 'structured';
+    return 'structured';
 }

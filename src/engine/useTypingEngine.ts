@@ -48,6 +48,8 @@ export function useTypingEngine({
     const totalCharsRef = useRef(0);
     const recentWordsRef = useRef<{ wpm: number; timestamp: number }[]>([]);
     const wordTimingsRef = useRef<number[]>([]);
+    const wpmHistoryRef = useRef<{ time: number; wpm: number; raw: number }[]>([]);
+    const historyIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
     // Reset when words change
     useEffect(() => {
@@ -61,6 +63,8 @@ export function useTypingEngine({
         totalCharsRef.current = 0;
         recentWordsRef.current = [];
         wordTimingsRef.current = [];
+        wpmHistoryRef.current = [];
+        clearInterval(historyIntervalRef.current);
     }, [words]);
 
     const calculateStats = useCallback((): TypingStats => {
@@ -102,6 +106,7 @@ export function useTypingEngine({
             totalWords: words.length,
             correctWords: correct,
             elapsedMs: elapsed,
+            wpmHistory: wpmHistoryRef.current,
         };
     }, [wordStates, words.length]);
 
@@ -154,6 +159,22 @@ export function useTypingEngine({
         if (!sessionStartRef.current) {
             sessionStartRef.current = Date.now();
             setIsStarted(true);
+            // Start recording WPM history every second
+            clearInterval(historyIntervalRef.current);
+            wpmHistoryRef.current = [];
+            historyIntervalRef.current = setInterval(() => {
+                if (!sessionStartRef.current) return;
+                const elapsed = Date.now() - sessionStartRef.current;
+                const elapsedMin = elapsed / 60000;
+                if (elapsedMin <= 0) return;
+                const wpm = (correctCharsRef.current / 5) / elapsedMin;
+                const raw = (totalCharsRef.current / 5) / elapsedMin;
+                wpmHistoryRef.current.push({
+                    time: Math.round(elapsed / 1000),
+                    wpm: Math.round(wpm),
+                    raw: Math.round(raw),
+                });
+            }, 1000);
         }
 
         setWordStates(prev => {
@@ -239,6 +260,8 @@ export function useTypingEngine({
         totalCharsRef.current = 0;
         recentWordsRef.current = [];
         wordTimingsRef.current = [];
+        wpmHistoryRef.current = [];
+        clearInterval(historyIntervalRef.current);
     }, [words]);
 
     return {

@@ -62,3 +62,10 @@ input::placeholder {
     opacity: 0;
   }
 }
+
+/* Spinner animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

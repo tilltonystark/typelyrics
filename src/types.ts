@@ -49,7 +49,7 @@ export interface WordState {
     correct: boolean;
 }
 
-export type TypingMode = 'flow' | 'structured';
+export type TypingMode = 'structured';
 
 // ── Timer options ──
 export type TimerOption = 30 | 60 | 120 | 'full';
@@ -63,6 +63,7 @@ export interface TypingStats {
     totalWords: number;
     correctWords: number;
     elapsedMs: number;
+    wpmHistory: { time: number; wpm: number; raw: number }[];
 }
 
 // ── Session result ──
@@ -79,6 +80,8 @@ export interface SessionResult {
     elapsedMs: number;
     timestamp: number;
     timerOption: TimerOption;
+    wpmHistory: { time: number; wpm: number; raw: number }[];
+    characters: { correct: number; incorrect: number; extra: number; missed: number };
 }
 
 // ── Analytics ──

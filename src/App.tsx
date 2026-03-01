@@ -57,6 +57,7 @@ export default function App() {
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
     const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
     const [spotifyNudge, setSpotifyNudge] = useState(false);
+    const [spotifyLoading, setSpotifyLoading] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<TrackSearchResult[]>([]);
@@ -88,6 +89,8 @@ export default function App() {
                 tempoStability: finalStats.tempoStability, wordsCompleted: finalStats.wordsCompleted,
                 totalWords: finalStats.totalWords, correctWords: finalStats.correctWords,
                 elapsedMs: finalStats.elapsedMs, timestamp: Date.now(), timerOption,
+                wpmHistory: finalStats.wpmHistory,
+                characters: { correct: 0, incorrect: 0, extra: 0, missed: 0 },
             });
             setScreen('results');
         },
@@ -110,6 +113,8 @@ export default function App() {
                             wordsCompleted: stats.wordsCompleted, totalWords: stats.totalWords,
                             correctWords: stats.correctWords, elapsedMs: stats.elapsedMs,
                             timestamp: Date.now(), timerOption,
+                            wpmHistory: stats.wpmHistory,
+                            characters: { correct: 0, incorrect: 0, extra: 0, missed: 0 },
                         });
                         setScreen('results');
                         return 0;
@@ -195,22 +200,28 @@ export default function App() {
         setScreen('typing'); setTimeRemaining(null); resetTyping(); searchInputRef.current?.focus();
     }, [resetTyping]);
 
-    const handleSpotifyClick = useCallback(() => {
+    const handleSpotifyClick = useCallback(async () => {
         if (spotify.state.connected) {
             // Toggle play/pause
-            if (spotify.state.playing) spotify.pause();
-            else {
-                if (currentTrack) {
-                    spotify.searchTrack(currentTrack.name, currentTrack.artist).then(uri => {
-                        if (uri) spotify.play(uri);
+            if (spotify.state.playing) {
+                spotify.pause();
+            } else {
+                setSpotifyLoading(true);
+                try {
+                    if (currentTrack) {
+                        const uri = await spotify.searchTrack(currentTrack.name, currentTrack.artist);
+                        if (uri) await spotify.play(uri);
                         else spotify.resume();
-                    });
-                } else spotify.resume();
+                    } else {
+                        spotify.resume();
+                    }
+                } catch { /* ignore */ }
+                setSpotifyLoading(false);
             }
         } else {
             // Not connected — show nudge
             setSpotifyNudge(true);
-            setTimeout(() => setSpotifyNudge(false), 4000);
+            setTimeout(() => setSpotifyNudge(false), 5000);
         }
     }, [spotify, currentTrack]);
 
@@ -223,7 +234,6 @@ export default function App() {
                 result={sessionResult}
                 onReplay={handleRestart}
                 onNewSong={handleNewSong}
-                onSwitchMode={handleRestart}
             />
         );
     }
@@ -241,14 +251,19 @@ export default function App() {
                     <div className="relative">
                         <button
                             onClick={handleSpotifyClick}
-                            className="text-xs px-3 py-1.5 rounded transition-all flex items-center gap-1"
+                            disabled={spotifyLoading}
+                            className="text-xs px-3 py-1.5 rounded transition-all flex items-center gap-1.5"
                             style={{
                                 background: spotify.state.connected ? (spotify.state.playing ? '#1DB954' : C.card) : 'transparent',
                                 color: spotify.state.connected ? (spotify.state.playing ? '#fff' : '#1DB954') : '#1DB954',
                                 border: spotify.state.connected ? 'none' : '1px solid #1DB95440',
+                                opacity: spotifyLoading ? 0.6 : 1,
+                                cursor: spotifyLoading ? 'wait' : 'pointer',
                             }}
                         >
-                            {spotify.state.connected
+                            {spotifyLoading ? (
+                                <><span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" style={{ animation: 'spin 0.6s linear infinite' }} /> loading...</>
+                            ) : spotify.state.connected
                                 ? (spotify.state.playing ? '⏸ pause' : '▶ play')
                                 : '▶ Spotify'
                             }
@@ -264,6 +279,7 @@ export default function App() {
                                     style={{ background: C.card, border: `1px solid ${C.border}`, color: C.text }}
                                 >
                                     <p className="mb-2">Connect your Spotify account to play music while typing.</p>
+                                    <p className="mb-3 text-[10px]" style={{ color: C.sub }}>⚠️ Spotify Premium required for in-browser playback</p>
                                     <a
                                         href="/auth/spotify"
                                         className="px-3 py-1.5 rounded inline-block no-underline text-center w-full"
