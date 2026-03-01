@@ -187,18 +187,24 @@ export default function App() {
     }, []);
 
     const selectTrack = useCallback((track: TrackSearchResult) => {
+        if (spotify.state.connected && spotify.state.playing) {
+            spotify.pause();
+        }
         setCurrentTrack({ name: track.track_name, artist: track.artist_name, id: track.id });
         setShowResults(false); setSearchQuery(''); setTimeRemaining(null);
         loadSong(track.track_name, track.id);
-    }, [loadSong]);
+    }, [loadSong, spotify]);
 
     const handleRestart = useCallback(() => {
         resetTyping(); setTimeRemaining(null); setScreen('typing');
     }, [resetTyping]);
 
     const handleNewSong = useCallback(() => {
+        if (spotify.state.connected && spotify.state.playing) {
+            spotify.pause();
+        }
         setScreen('typing'); setTimeRemaining(null); resetTyping(); searchInputRef.current?.focus();
-    }, [resetTyping]);
+    }, [resetTyping, spotify]);
 
     const handleSpotifyClick = useCallback(async () => {
         if (spotify.state.connected) {
@@ -244,7 +250,7 @@ export default function App() {
             {/* Header */}
             <header className="flex items-center justify-between px-8 py-5">
                 <h1 onClick={handleNewSong} className="text-2xl font-bold cursor-pointer tracking-tight" style={{ color: C.accent }}>
-                    lyritype
+                    lyricstype
                 </h1>
                 <div className="flex items-center gap-3">
                     {/* Spotify play/pause */}
@@ -355,19 +361,40 @@ export default function App() {
             </div>
 
             {/* Main typing area */}
-            <main className="flex-1 flex flex-col items-center justify-center px-8 py-6">
-                <div className="flex items-center gap-6 mb-6">
-                    {timerOption !== 'full' && (
-                        <span className="text-3xl font-bold" style={{ color: C.accent }}>
-                            {timeRemaining !== null ? formatTime(timeRemaining) : formatTime(timerOption as number)}
-                        </span>
-                    )}
-                    {isStarted && (
-                        <>
-                            <span className="text-lg" style={{ color: C.text }}>{stats.wpm} <span className="text-xs" style={{ color: C.sub }}>wpm</span></span>
-                            <span className="text-lg" style={{ color: C.text }}>{stats.accuracy}% <span className="text-xs" style={{ color: C.sub }}>acc</span></span>
-                        </>
-                    )}
+            <main className="flex-1 flex flex-col items-center justify-center px-8 py-6 w-full max-w-5xl mx-auto">
+                {/* Song Info & Stats Header */}
+                <div className="flex items-center justify-between w-full mb-8 h-10">
+                    {/* Left: Song Info */}
+                    <div className="flex-1 min-w-0">
+                        {currentTrack && (
+                            <AnimatePresence mode="popLayout">
+                                <motion.div
+                                    key={currentTrack.id || currentTrack.name}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className="flex items-center gap-2"
+                                >
+                                    <span className="text-lg font-bold truncate" style={{ color: C.text }}>{currentTrack.name}</span>
+                                    <span className="text-sm truncate" style={{ color: C.sub }}>by {currentTrack.artist}</span>
+                                </motion.div>
+                            </AnimatePresence>
+                        )}
+                    </div>
+
+                    {/* Right: Stats */}
+                    <div className="flex items-center gap-6 justify-end flex-shrink-0">
+                        {timerOption !== 'full' && (
+                            <span className="text-3xl font-bold font-mono" style={{ color: C.accent }}>
+                                {timeRemaining !== null ? formatTime(timeRemaining) : formatTime(timerOption as number)}
+                            </span>
+                        )}
+                        {isStarted && (
+                            <>
+                                <span className="text-lg font-mono" style={{ color: C.text }}>{stats.wpm} <span className="text-xs font-sans" style={{ color: C.sub }}>wpm</span></span>
+                                <span className="text-lg font-mono" style={{ color: C.text }}>{stats.accuracy}% <span className="text-xs font-sans" style={{ color: C.sub }}>acc</span></span>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {loadingLyrics ? (
@@ -391,16 +418,20 @@ export default function App() {
             </main>
 
             {/* Footer */}
-            <footer className="px-8 py-4 flex items-center justify-center gap-4">
-                <KeyBadge keys={['tab']} /> <span style={{ color: C.sub }}>+</span>
-                <KeyBadge keys={['enter']} />
-                <span className="text-xs" style={{ color: C.sub }}>— restart</span>
-                <span className="mx-2" style={{ color: C.border }}>|</span>
-                <KeyBadge keys={['space']} />
-                <span className="text-xs" style={{ color: C.sub }}>— next word</span>
+            <footer className="px-8 py-4 flex flex-col items-center justify-center gap-2">
+                <div className="flex items-center gap-4">
+                    <KeyBadge keys={['tab']} /> <span style={{ color: C.sub }}>+</span>
+                    <KeyBadge keys={['enter']} />
+                    <span className="text-xs" style={{ color: C.sub }}>— restart test</span>
+                    <span className="mx-2" style={{ color: C.border }}>|</span>
+                    <KeyBadge keys={['esc']} /> <span className="text-xs mx-1" style={{ color: C.sub }}>or</span>
+                    <KeyBadge keys={['tab']} /> <span style={{ color: C.sub }}>+</span>
+                    <KeyBadge keys={['space']} />
+                    <span className="text-xs" style={{ color: C.sub }}>— new song</span>
+                </div>
             </footer>
 
-            <KeyboardShortcuts onRestart={handleRestart} />
+            <KeyboardShortcuts onRestart={handleRestart} onNewSong={handleNewSong} />
         </div>
     );
 }
@@ -522,8 +553,8 @@ function TypingRenderer({
     return (
         <div
             ref={containerRef}
-            className="overflow-hidden relative"
-            style={{ width: '65%', maxWidth: '900px', maxHeight: '280px', margin: '0 auto', textAlign: 'left' }}
+            className="overflow-hidden relative w-full"
+            style={{ maxHeight: '280px', textAlign: 'left' }}
         >
             <div className="space-y-3">
                 {lines.slice(startLine, endLine).map((line, li) => {
@@ -550,17 +581,19 @@ function TypingRenderer({
     );
 }
 
-function KeyboardShortcuts({ onRestart }: { onRestart: () => void }) {
+function KeyboardShortcuts({ onRestart, onNewSong }: { onRestart: () => void, onNewSong: () => void }) {
     const tabRef = useRef(false);
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             if (e.key === 'Tab') { e.preventDefault(); tabRef.current = true; }
+            if (e.key === 'Escape') { e.preventDefault(); onNewSong(); }
             if (e.key === 'Enter' && tabRef.current) { e.preventDefault(); onRestart(); tabRef.current = false; }
+            if (e.key === ' ' && tabRef.current) { e.preventDefault(); onNewSong(); tabRef.current = false; }
         };
         const up = (e: KeyboardEvent) => { if (e.key === 'Tab') tabRef.current = false; };
         window.addEventListener('keydown', down);
         window.addEventListener('keyup', up);
         return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-    }, [onRestart]);
+    }, [onRestart, onNewSong]);
     return null;
 }

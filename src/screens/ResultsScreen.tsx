@@ -145,58 +145,79 @@ export default function ResultsScreen({ result, onReplay, onNewSong }: ResultsSc
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             if (e.key === 'Tab') { e.preventDefault(); tabRef.current = true; }
+            if (e.key === 'Escape') { e.preventDefault(); onNewSong(); }
             if (e.key === 'Enter' && tabRef.current) { e.preventDefault(); onReplay(); tabRef.current = false; }
+            if (e.key === ' ' && tabRef.current) { e.preventDefault(); onNewSong(); tabRef.current = false; }
         };
         const up = (e: KeyboardEvent) => { if (e.key === 'Tab') tabRef.current = false; };
         window.addEventListener('keydown', down);
         window.addEventListener('keyup', up);
         return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-    }, [onReplay]);
+    }, [onReplay, onNewSong]);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: C.bg, color: C.text, fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
+
+            {/* Logo at the top */}
+            <header className="absolute top-0 left-0 w-full px-8 py-5">
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.accent }}>
+                    lyricstype
+                </h1>
+            </header>
+
             <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="w-full max-w-2xl"
+                className="w-full max-w-4xl"
             >
-                {/* Top section: WPM + Accuracy + Chart */}
-                <div className="flex gap-8 items-start mb-6">
-                    {/* Left: Big stats */}
-                    <div className="flex-shrink-0">
-                        <div className="mb-4">
-                            <span className="text-sm block" style={{ color: C.sub }}>wpm</span>
-                            <motion.span
-                                className="text-6xl font-bold font-mono block"
-                                style={{ color: C.accent }}
-                                initial={{ scale: 0.5, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
-                            >
-                                {result.avgWpm}
-                            </motion.span>
-                        </div>
-                        <div>
-                            <span className="text-sm block" style={{ color: C.sub }}>acc</span>
-                            <span className="text-4xl font-bold font-mono block" style={{ color: C.text }}>
-                                {result.accuracy}%
-                            </span>
-                        </div>
+                {/* Top section: Basic Stats */}
+                <div className="flex gap-12 items-center mb-8">
+                    {/* Big WPM */}
+                    <div>
+                        <span className="text-base block mb-1" style={{ color: C.sub }}>wpm</span>
+                        <motion.span
+                            className="text-7xl font-bold font-mono block leading-none"
+                            style={{ color: C.accent }}
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
+                        >
+                            {result.avgWpm}
+                        </motion.span>
+                    </div>
+                    {/* Big Accuracy */}
+                    <div>
+                        <span className="text-base block mb-1" style={{ color: C.sub }}>acc</span>
+                        <span className="text-5xl font-bold font-mono block leading-none" style={{ color: C.text }}>
+                            {result.accuracy}%
+                        </span>
                     </div>
 
-                    {/* Right: WPM Chart */}
-                    <div className="flex-1 min-w-0">
-                        <WpmChart history={result.wpmHistory} />
+                    {/* Secondary Stats */}
+                    <div className="flex gap-8 ml-auto text-left">
+                        <div>
+                            <span className="text-sm block" style={{ color: C.sub }}>test type</span>
+                            <span className="text-xl font-mono" style={{ color: C.text }}>{formatTimerLabel(result.timerOption)}</span>
+                        </div>
+                        <div>
+                            <span className="text-sm block" style={{ color: C.sub }}>raw</span>
+                            <span className="text-xl font-mono" style={{ color: C.text }}>{result.avgWpm}</span>
+                        </div>
+                        <div>
+                            <span className="text-sm block" style={{ color: C.sub }}>words</span>
+                            <span className="text-xl font-mono" style={{ color: C.text }}>{result.correctWords}/{result.totalWords}</span>
+                        </div>
+                        <div>
+                            <span className="text-sm block" style={{ color: C.sub }}>time</span>
+                            <span className="text-xl font-mono" style={{ color: C.text }}>{Math.round(result.elapsedMs / 1000)}s</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-4 gap-3 p-4 rounded mb-6" style={{ background: C.card }}>
-                    <Stat label="test type" value={formatTimerLabel(result.timerOption)} accent />
-                    <Stat label="raw" value={`${result.avgWpm}`} />
-                    <Stat label="words" value={`${result.correctWords}/${result.totalWords}`} />
-                    <Stat label="time" value={`${Math.round(result.elapsedMs / 1000)}s`} />
+                {/* Main Graph */}
+                <div className="w-full mb-10 h-48">
+                    <WpmChart history={result.wpmHistory} />
                 </div>
 
                 {/* Track info */}
@@ -205,17 +226,18 @@ export default function ResultsScreen({ result, onReplay, onNewSong }: ResultsSc
                 </p>
 
                 {/* Action buttons */}
-                <div className="flex gap-3">
+                <div className="flex gap-4 justify-center">
                     <button onClick={onReplay}
-                        className="flex-1 py-3 rounded font-medium text-sm flex flex-col items-center gap-1"
-                        style={{ background: '#fff', color: '#333' }}>
-                        <span>restart</span>
+                        className="w-48 py-3 rounded font-medium text-sm flex flex-col items-center gap-1 transition-opacity hover:opacity-90"
+                        style={{ background: C.text, color: C.bg }}>
+                        <span>restart test</span>
                         <span className="text-[10px] opacity-60">tab + enter</span>
                     </button>
                     <button onClick={onNewSong}
-                        className="flex-1 py-3 rounded font-medium text-sm"
+                        className="w-48 py-3 rounded font-medium text-sm flex flex-col items-center gap-1 transition-opacity hover:opacity-90"
                         style={{ background: C.card, color: C.text }}>
-                        new song
+                        <span>new song</span>
+                        <span className="text-[10px] opacity-60">esc / tab + space</span>
                     </button>
                 </div>
             </motion.div>
