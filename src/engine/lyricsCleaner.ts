@@ -171,8 +171,6 @@ export function cleanLine(line: string): string {
         .trim();
     // Final cleanup: remove any surviving non-Latin characters
     cleaned = stripNonLatin(cleaned);
-    // Deduplicate consecutive repeated characters (e.g. "chaaalaaaae" → "chalae")
-    cleaned = cleaned.replace(/(.)\1+/g, '$1');
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     return cleaned;
 }

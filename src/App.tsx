@@ -37,13 +37,13 @@ const TIMER_OPTIONS: { label: string; value: TimerOption }[] = [
 ];
 
 const C = {
-    bg: '#323437',
+    bg: '#000000',
     sub: '#646669',
     text: '#d1d0c5',
     error: '#ca4754',
     accent: '#e2b714',
-    card: '#2c2e31',
-    border: '#3a3c3f',
+    card: '#111111',
+    border: '#2a2a2a',
 };
 
 export default function App() {
@@ -648,7 +648,7 @@ function TypingRenderer({
                         <div
                             key={line.lineIndex}
                             ref={isCurrent ? activeLineRef : undefined}
-                            className="text-2xl leading-relaxed"
+                            className="text-3xl leading-relaxed"
                             style={{
                                 opacity: isCurrent ? 1 : isLast ? 0.15 : actualIdx < currentLineIdx ? 0.3 : 0.5,
                                 transition: 'opacity 0.5s ease',

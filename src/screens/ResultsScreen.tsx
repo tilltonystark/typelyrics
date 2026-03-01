@@ -4,13 +4,13 @@ import { useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 
 const C = {
-    bg: '#323437',
+    bg: '#000000',
     sub: '#646669',
     text: '#d1d0c5',
     error: '#ca4754',
     accent: '#e2b714',
-    card: '#2c2e31',
-    border: '#3a3c3f',
+    card: '#111111',
+    border: '#2a2a2a',
 };
 
 interface ResultsScreenProps {
@@ -181,55 +181,55 @@ export default function ResultsScreen({ result, user, onReplay, onNewSong }: Res
                 transition={{ duration: 0.4 }}
                 className="w-full max-w-4xl"
             >
-                {/* Main section: Stats left, Chart right */}
-                <div className="flex gap-8 items-stretch mb-8">
-                    {/* Left: Stats in vertical 2×3 grid */}
-                    <div className="flex-shrink-0 w-48">
-                        <div className="grid grid-cols-1 gap-5">
-                            {/* Primary stats */}
-                            <div>
-                                <span className="text-sm block mb-1" style={{ color: C.sub }}>wpm</span>
-                                <motion.span
-                                    className="text-6xl font-bold font-mono block leading-none"
-                                    style={{ color: C.accent }}
-                                    initial={{ scale: 0.5, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
-                                >
-                                    {result.avgWpm}
-                                </motion.span>
-                            </div>
-                            <div>
-                                <span className="text-sm block mb-1" style={{ color: C.sub }}>acc</span>
-                                <span className="text-4xl font-bold font-mono block leading-none" style={{ color: C.text }}>
-                                    {result.accuracy}%
-                                </span>
-                            </div>
-                            {/* Secondary stats in 2-col sub-grid */}
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
-                                <div>
-                                    <span className="text-xs block" style={{ color: C.sub }}>test type</span>
-                                    <span className="text-base font-mono" style={{ color: C.text }}>{formatTimerLabel(result.timerOption)}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs block" style={{ color: C.sub }}>raw</span>
-                                    <span className="text-base font-mono" style={{ color: C.text }}>{result.avgWpm}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs block" style={{ color: C.sub }}>words</span>
-                                    <span className="text-base font-mono" style={{ color: C.text }}>{result.correctWords}/{result.totalWords}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs block" style={{ color: C.sub }}>time</span>
-                                    <span className="text-base font-mono" style={{ color: C.text }}>{Math.round(result.elapsedMs / 1000)}s</span>
-                                </div>
-                            </div>
+                {/* Main section: WPM+ACC on left │ Graph+secondary stats on right */}
+                <div className="flex gap-10 items-start mb-8">
+
+                    {/* Left: Primary stats */}
+                    <div className="flex-shrink-0 w-40 flex flex-col gap-5">
+                        <div>
+                            <span className="text-sm block mb-1" style={{ color: C.sub }}>wpm</span>
+                            <motion.span
+                                className="text-6xl font-bold font-mono block leading-none"
+                                style={{ color: C.accent }}
+                                initial={{ scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ type: 'spring', stiffness: 200, damping: 12, delay: 0.2 }}
+                            >
+                                {result.avgWpm}
+                            </motion.span>
+                        </div>
+                        <div>
+                            <span className="text-sm block mb-1" style={{ color: C.sub }}>acc</span>
+                            <span className="text-4xl font-bold font-mono block leading-none" style={{ color: C.text }}>
+                                {result.accuracy}%
+                            </span>
                         </div>
                     </div>
 
-                    {/* Right: WPM Chart */}
-                    <div className="flex-1 min-w-0 flex items-center">
+                    {/* Right: Graph + secondary stats below it */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-4">
+                        {/* Chart */}
                         <WpmChart history={result.wpmHistory} />
+
+                        {/* Secondary stats as horizontal row below chart */}
+                        <div className="flex gap-8" style={{ borderTop: `1px solid ${C.border}`, paddingTop: '10px' }}>
+                            <div>
+                                <span className="text-xs block" style={{ color: C.sub }}>test type</span>
+                                <span className="text-base font-mono" style={{ color: C.text }}>{formatTimerLabel(result.timerOption)}</span>
+                            </div>
+                            <div>
+                                <span className="text-xs block" style={{ color: C.sub }}>raw</span>
+                                <span className="text-base font-mono" style={{ color: C.text }}>{result.avgWpm}</span>
+                            </div>
+                            <div>
+                                <span className="text-xs block" style={{ color: C.sub }}>words</span>
+                                <span className="text-base font-mono" style={{ color: C.text }}>{result.correctWords}/{result.totalWords}</span>
+                            </div>
+                            <div>
+                                <span className="text-xs block" style={{ color: C.sub }}>time</span>
+                                <span className="text-base font-mono" style={{ color: C.text }}>{Math.round(result.elapsedMs / 1000)}s</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
