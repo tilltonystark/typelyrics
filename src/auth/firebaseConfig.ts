@@ -2,13 +2,13 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAVr3xx0KLwaX_XbFuQY3aD1kkErpGzK8A",
-    authDomain: "typelyrics-61143.firebaseapp.com",
-    projectId: "typelyrics-61143",
-    storageBucket: "typelyrics-61143.firebasestorage.app",
-    messagingSenderId: "801588447826",
-    appId: "1:801588447826:web:6e2c319273e56b2a7eed8b",
-    measurementId: "G-94MM661W6Z",
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = initializeApp(firebaseConfig);

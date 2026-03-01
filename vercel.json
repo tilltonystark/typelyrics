@@ -1,0 +1,29 @@
+{
+    "builds": [
+        {
+            "src": "server/index.ts",
+            "use": "@vercel/node"
+        },
+        {
+            "src": "package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "dist"
+            }
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/server/index.ts"
+        },
+        {
+            "source": "/auth/(.*)",
+            "destination": "/server/index.ts"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
