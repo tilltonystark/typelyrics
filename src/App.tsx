@@ -244,6 +244,24 @@ export default function App() {
         }
     }, [spotify, currentTrack, musicMode]);
 
+    // Auto-switch playback when music mode is toggled while playing
+    useEffect(() => {
+        if (!spotify.state.connected || !spotify.state.playing || !currentTrack) return;
+        let cancelled = false;
+        (async () => {
+            setSpotifyLoading(true);
+            try {
+                const q = musicMode
+                    ? `${currentTrack.name} ${currentTrack.artist} instrumental`
+                    : `${currentTrack.name} ${currentTrack.artist}`;
+                const uri = await spotify.searchTrack(q, '');
+                if (uri && !cancelled) await spotify.play(uri);
+            } catch { /* ignore */ }
+            if (!cancelled) setSpotifyLoading(false);
+        })();
+        return () => { cancelled = true; };
+    }, [musicMode]);
+
     const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
     // Results
