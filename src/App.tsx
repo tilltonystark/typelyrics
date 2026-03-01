@@ -280,13 +280,13 @@ export default function App() {
                                 >
                                     <p className="mb-2">Connect your Spotify account to play music while typing.</p>
                                     <p className="mb-3 text-[10px]" style={{ color: C.sub }}>⚠️ Spotify Premium required for in-browser playback</p>
-                                    <a
-                                        href="/auth/spotify"
-                                        className="px-3 py-1.5 rounded inline-block no-underline text-center w-full"
-                                        style={{ background: '#1DB954', color: '#fff' }}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); window.location.href = '/auth/spotify'; }}
+                                        className="px-3 py-1.5 rounded inline-block no-underline text-center w-full cursor-pointer text-xs"
+                                        style={{ background: '#1DB954', color: '#fff', border: 'none' }}
                                     >
                                         Connect Spotify
-                                    </a>
+                                    </button>
                                 </motion.div>
                             )}
                         </AnimatePresence>
