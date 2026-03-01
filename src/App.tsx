@@ -34,10 +34,8 @@ export default function App() {
     const [screen, setScreen] = useState<'typing' | 'results'>('typing');
     const [lyrics, setLyrics] = useState<LyricsData | null>(null);
     const [currentTrack, setCurrentTrack] = useState<{ name: string; artist: string; id?: number } | null>(null);
-    const [mode, setMode] = useState<TypingMode>('flow');
     const [timerOption, setTimerOption] = useState<TimerOption>(30);
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-    const [audioFile, setAudioFile] = useState<File | null>(null);
     const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
     const [spotifyNudge, setSpotifyNudge] = useState(false);
 
@@ -64,18 +62,12 @@ export default function App() {
         wordStates, currentWordIndex, currentCharIndex,
         stats, isComplete, isStarted, handleKeyDown, reset: resetTyping,
     } = useTypingEngine({
-        words, mode,
-        onWordComplete: (idx, duration, correct) => {
-            if (mode === 'flow' && audioEngineRef.current && correct) {
-                const nextWord = words[idx + 1];
-                if (nextWord) audioEngineRef.current.playWordSegment(nextWord, duration);
-            }
-        },
+        words, mode: 'structured',
         onSessionComplete: (finalStats) => {
             setSessionResult({
                 trackName: currentTrack?.name || 'Unknown',
                 artistName: currentTrack?.artist || 'Unknown',
-                mode, avgWpm: finalStats.wpm, accuracy: finalStats.accuracy,
+                mode: 'structured', avgWpm: finalStats.wpm, accuracy: finalStats.accuracy,
                 tempoStability: finalStats.tempoStability, wordsCompleted: finalStats.wordsCompleted,
                 totalWords: finalStats.totalWords, correctWords: finalStats.correctWords,
                 elapsedMs: finalStats.elapsedMs, timestamp: Date.now(), timerOption,
@@ -97,7 +89,7 @@ export default function App() {
                         clearInterval(timerRef.current);
                         setSessionResult({
                             trackName: currentTrack?.name || 'Unknown', artistName: currentTrack?.artist || 'Unknown',
-                            mode, avgWpm: stats.wpm, accuracy: stats.accuracy, tempoStability: stats.tempoStability,
+                            mode: 'structured', avgWpm: stats.wpm, accuracy: stats.accuracy, tempoStability: stats.tempoStability,
                             wordsCompleted: stats.wordsCompleted, totalWords: stats.totalWords,
                             correctWords: stats.correctWords, elapsedMs: stats.elapsedMs,
                             timestamp: Date.now(), timerOption,
@@ -126,28 +118,7 @@ export default function App() {
         return () => window.removeEventListener('keydown', handler);
     }, [screen, lyrics, handleKeyDown]);
 
-    useEffect(() => {
-        if (audioFile && mode === 'flow') {
-            const engine = new AudioEngine();
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const buffer = e.target?.result as ArrayBuffer;
-                await engine.loadBuffer(buffer);
-                audioEngineRef.current = engine;
-            };
-            reader.readAsArrayBuffer(audioFile);
-            return () => engine.destroy();
-        }
-    }, [audioFile, mode]);
-
-    // Auto-play Spotify when song changes
-    useEffect(() => {
-        if (spotify.state.connected && spotify.state.deviceId && currentTrack) {
-            spotify.searchTrack(currentTrack.name, currentTrack.artist).then(uri => {
-                if (uri) spotify.play(uri);
-            });
-        }
-    }, [currentTrack, spotify.state.connected, spotify.state.deviceId]);
+    // Removed auto-play effect. User must explicitly click play.
 
     const handleSearchInput = useCallback((value: string) => {
         setSearchQuery(value);
@@ -235,7 +206,7 @@ export default function App() {
                 result={sessionResult}
                 onReplay={handleRestart}
                 onNewSong={handleNewSong}
-                onSwitchMode={() => { setMode(m => m === 'flow' ? 'structured' : 'flow'); handleRestart(); }}
+                onSwitchMode={handleRestart}
             />
         );
     }
@@ -288,12 +259,7 @@ export default function App() {
                         </AnimatePresence>
                     </div>
 
-                    {/* Spotify now-playing mini */}
-                    {spotify.state.connected && spotify.state.playing && spotify.state.trackName && (
-                        <span className="text-[10px] max-w-[120px] truncate" style={{ color: C.sub }}>
-                            {spotify.state.trackName}
-                        </span>
-                    )}
+                    {/* Removed Spotify now-playing mini to prevent layout shift */}
 
                     {/* Auth */}
                     {authLoading ? null : user ? (
@@ -309,15 +275,10 @@ export default function App() {
 
             {/* Options bar */}
             <div className="flex items-center justify-center gap-4 px-8 py-3">
-                <div className="flex items-center gap-2 text-sm">
-                    {(['flow', 'structured'] as TypingMode[]).map(m => (
-                        <button key={m} onClick={() => { setMode(m); handleRestart(); }}
-                            className="px-3 py-1 rounded transition-colors"
-                            style={{ background: mode === m ? C.card : 'transparent', color: mode === m ? C.accent : C.sub }}>
-                            {m === 'flow' ? '⚡ flow' : '♫ lyrics'}
-                        </button>
-                    ))}
-                </div>
+                {/* Removed mode toggle, keeping only standard mode */}
+                <button className="px-3 py-1 rounded" style={{ background: C.card, color: C.accent }}>
+                    ♫ lyrics
+                </button>
                 <span style={{ color: C.border }}>|</span>
                 <div className="flex items-center gap-1 text-sm">
                     {TIMER_OPTIONS.map(opt => (
@@ -363,22 +324,7 @@ export default function App() {
                         )}
                     </AnimatePresence>
                 </div>
-                {mode === 'flow' && (
-                    <div className="relative group">
-                        <button onClick={() => audioFile ? undefined : fileInputRef.current?.click()}
-                            className="text-xs px-3 py-1.5 rounded transition-colors"
-                            style={{ background: audioFile ? C.card : 'transparent', color: audioFile ? C.accent : C.sub, border: audioFile ? 'none' : `1px solid ${C.border}` }}>
-                            {audioFile ? `♫ ${audioFile.name.slice(0, 18)}` : '♫ mp3'}
-                        </button>
-                        {audioFile && (
-                            <button onClick={() => { if (confirm('Remove uploaded audio?')) { setAudioFile(null); audioEngineRef.current?.destroy(); audioEngineRef.current = null; } }}
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none"
-                                style={{ background: C.error, color: '#fff' }}>×</button>
-                        )}
-                        <input ref={fileInputRef} type="file" accept="audio/*"
-                            onChange={e => { const f = e.target.files?.[0]; if (f?.type.startsWith('audio/')) setAudioFile(f); }} className="hidden" />
-                    </div>
-                )}
+                {/* Removed flow mode audio upload button */}
             </div>
 
             {/* Main typing area */}
@@ -403,12 +349,14 @@ export default function App() {
                 {loadingLyrics ? (
                     <p className="text-sm" style={{ color: C.sub }}>loading lyrics...</p>
                 ) : words.length > 0 ? (
-                    <TypingRenderer
-                        wordStates={wordStates}
-                        currentWordIndex={currentWordIndex}
-                        currentCharIndex={currentCharIndex}
-                        mode={mode}
-                    />
+                    <div className="w-full flex justify-center">
+                        <TypingRenderer
+                            wordStates={wordStates}
+                            currentWordIndex={currentWordIndex}
+                            currentCharIndex={currentCharIndex}
+                            mode="structured"
+                        />
+                    </div>
                 ) : (
                     <p className="text-sm" style={{ color: C.sub }}>no lyrics loaded</p>
                 )}
@@ -507,12 +455,12 @@ function TypingRenderer({
         return (
             <span key={ci} className="relative inline-block">
                 {isAtCursor && (
-                    <motion.span
-                        layoutId="cursor"
+                    <span
                         className="absolute left-0 top-[2px] bottom-[2px] w-[2.5px] rounded-full"
-                        style={{ background: C.accent }}
-                        animate={{ opacity: [1, 0, 1] }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                        style={{
+                            background: C.accent,
+                            animation: 'blink 1s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                        }}
                     />
                 )}
                 <span style={{
@@ -526,11 +474,12 @@ function TypingRenderer({
                 </span>
                 {/* Cursor after last char (waiting for space) */}
                 {isAfterLastChar && (
-                    <motion.span
+                    <span
                         className="absolute right-[-2px] top-[2px] bottom-[2px] w-[2.5px] rounded-full"
-                        style={{ background: C.accent }}
-                        animate={{ opacity: [1, 0, 1] }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                        style={{
+                            background: C.accent,
+                            animation: 'blink 1s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                        }}
                     />
                 )}
             </span>
