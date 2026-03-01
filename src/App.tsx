@@ -4,7 +4,6 @@ import { TrackSearchResult, LyricsData, TypingMode, TimerOption, SessionResult }
 import { buildWordSegments } from './engine/lyricsParser';
 import { cleanAllLyrics } from './engine/lyricsCleaner';
 import { useTypingEngine } from './engine/useTypingEngine';
-import { AudioEngine } from './engine/AudioEngine';
 import { useAuth } from './auth/useAuth';
 import { useSpotifyPlayer } from './engine/useSpotifyPlayer';
 import ResultsScreen from './screens/ResultsScreen';
@@ -47,8 +46,6 @@ export default function App() {
 
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
     const timerRef = useRef<ReturnType<typeof setInterval>>();
-    const audioEngineRef = useRef<AudioEngine | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     const words = useMemo(() => {
@@ -248,7 +245,7 @@ export default function App() {
                                 >
                                     <p className="mb-2">Connect your Spotify account to play music while typing.</p>
                                     <a
-                                        href="http://127.0.0.1:3001/auth/spotify"
+                                        href="/auth/spotify"
                                         className="px-3 py-1.5 rounded inline-block no-underline text-center w-full"
                                         style={{ background: '#1DB954', color: '#fff' }}
                                     >
@@ -394,9 +391,9 @@ function KeyBadge({ keys }: { keys: string[] }) {
     );
 }
 
-// ── Typing Renderer: 4-5 lines visible, last faded, smooth cursor ──
+// ── Typing Renderer: 5 lines visible, last faded, smooth cursor ──
 function TypingRenderer({
-    wordStates, currentWordIndex, currentCharIndex, mode,
+    wordStates, currentWordIndex, currentCharIndex,
 }: {
     wordStates: import('./types').WordState[];
     currentWordIndex: number;
@@ -430,7 +427,6 @@ function TypingRenderer({
             const containerRect = container.getBoundingClientRect();
             const lineRect = activeLine.getBoundingClientRect();
             const offset = lineRect.top - containerRect.top;
-            // Keep active line in top third
             if (offset > 60 || offset < 0) {
                 container.scrollTo({
                     top: container.scrollTop + offset - 20,
@@ -440,11 +436,23 @@ function TypingRenderer({
         }
     }, [currentWordIndex]);
 
+    // Cursor element — absolutely positioned, never shifts text
+    const Cursor = ({ position }: { position: 'before' | 'after' }) => (
+        <span
+            className="absolute top-[2px] bottom-[2px] w-[2.5px] rounded-full"
+            style={{
+                background: C.accent,
+                animation: 'blink 1s ease-in-out infinite',
+                [position === 'before' ? 'left' : 'right']: '-1px',
+                zIndex: 2,
+                pointerEvents: 'none',
+            }}
+        />
+    );
+
     const renderChar = (char: string, ci: number, ws: typeof wordStates[0], isCurrentWord: boolean) => {
         const state = ws.chars[ci];
-        // Cursor is at the position the user is about to type
         const isAtCursor = isCurrentWord && ci === currentCharIndex && state === 'current';
-        // Also show cursor after last char when all chars typed but waiting for space
         const isAfterLastChar = isCurrentWord && ci === ws.segment.word.length - 1 &&
             currentCharIndex >= ws.segment.word.length && (state === 'correct' || state === 'incorrect');
 
@@ -454,34 +462,15 @@ function TypingRenderer({
 
         return (
             <span key={ci} className="relative inline-block">
-                {isAtCursor && (
-                    <span
-                        className="absolute left-0 top-[2px] bottom-[2px] w-[2.5px] rounded-full"
-                        style={{
-                            background: C.accent,
-                            animation: 'blink 1s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                        }}
-                    />
-                )}
+                {isAtCursor && <Cursor position="before" />}
                 <span style={{
                     color,
                     background: state === 'incorrect' ? 'rgba(202,71,84,0.15)' : 'transparent',
                     borderRadius: state === 'incorrect' ? '2px' : '0',
-                    paddingLeft: isAtCursor ? '4px' : '0',
-                    transition: 'color 0.1s ease, padding-left 0.15s ease',
                 }}>
                     {char}
                 </span>
-                {/* Cursor after last char (waiting for space) */}
-                {isAfterLastChar && (
-                    <span
-                        className="absolute right-[-2px] top-[2px] bottom-[2px] w-[2.5px] rounded-full"
-                        style={{
-                            background: C.accent,
-                            animation: 'blink 1s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                        }}
-                    />
-                )}
+                {isAfterLastChar && <Cursor position="after" />}
             </span>
         );
     };
@@ -494,22 +483,22 @@ function TypingRenderer({
                 <span className="inline-block">
                     {ws.segment.word.split('').map((ch, ci) => renderChar(ch, ci, ws, isCurrentWord))}
                 </span>
-                <span style={{ color: '#3a3c3f' }}>{' '}</span>
+                <span style={{ color: 'transparent' }}>{' '}</span>
             </span>
         );
     };
 
-    // Find which lines to show: show lines around the current line
+    // Find which lines to show
     const currentLineIdx = lines.findIndex(l => l.lineIndex === currentLine);
     const VISIBLE_LINES = 5;
-    const startLine = Math.max(0, currentLineIdx - 0); // active line at top
+    const startLine = Math.max(0, currentLineIdx);
     const endLine = Math.min(lines.length, startLine + VISIBLE_LINES);
 
     return (
         <div
             ref={containerRef}
-            className="w-full overflow-hidden relative"
-            style={{ maxWidth: '75%', maxHeight: '280px' }}
+            className="overflow-hidden relative"
+            style={{ width: '70%', maxHeight: '280px', margin: '0 auto', textAlign: 'left' }}
         >
             <div className="space-y-3">
                 {lines.slice(startLine, endLine).map((line, li) => {
@@ -521,9 +510,10 @@ function TypingRenderer({
                         <div
                             key={line.lineIndex}
                             ref={isCurrent ? activeLineRef : undefined}
-                            className="text-2xl leading-relaxed transition-opacity duration-500"
+                            className="text-2xl leading-relaxed"
                             style={{
                                 opacity: isCurrent ? 1 : isLast ? 0.15 : actualIdx < currentLineIdx ? 0.3 : 0.5,
+                                transition: 'opacity 0.5s ease',
                             }}
                         >
                             {line.words.map((ws, wi) => renderWord(ws, wi))}
