@@ -8,7 +8,27 @@ import { useAuth } from './auth/useAuth';
 import { useSpotifyPlayer } from './engine/useSpotifyPlayer';
 import ResultsScreen from './screens/ResultsScreen';
 
-const DEFAULT_SONG_QUERY = 'Bohemian Rhapsody Queen';
+const DEFAULT_SONGS = [
+    'Bohemian Rhapsody Queen',
+    'Hotel California Eagles',
+    'Imagine John Lennon',
+    'Stairway to Heaven Led Zeppelin',
+    'Billie Jean Michael Jackson',
+    'Yesterday Beatles',
+    'Smells Like Teen Spirit Nirvana',
+    'Shape of You Ed Sheeran',
+    'Blinding Lights The Weeknd',
+    'Someone Like You Adele',
+    'Rolling in the Deep Adele',
+    'Lose Yourself Eminem',
+    'Let It Be Beatles',
+    'Wonderwall Oasis',
+    'Counting Stars OneRepublic',
+    'Perfect Ed Sheeran',
+    'Viva la Vida Coldplay',
+    'Uptown Funk Bruno Mars',
+];
+const getRandomSong = () => DEFAULT_SONGS[Math.floor(Math.random() * DEFAULT_SONGS.length)];
 const TIMER_OPTIONS: { label: string; value: TimerOption }[] = [
     { label: '30', value: 30 },
     { label: '60', value: 60 },
@@ -101,7 +121,7 @@ export default function App() {
         }
     }, [timeRemaining]);
 
-    useEffect(() => { loadSong(DEFAULT_SONG_QUERY); }, []);
+    useEffect(() => { loadSong(getRandomSong()); }, []);
 
     useEffect(() => {
         if (screen !== 'typing' || !lyrics) return;
@@ -272,11 +292,6 @@ export default function App() {
 
             {/* Options bar */}
             <div className="flex items-center justify-center gap-4 px-8 py-3">
-                {/* Removed mode toggle, keeping only standard mode */}
-                <button className="px-3 py-1 rounded" style={{ background: C.card, color: C.accent }}>
-                    ♫ lyrics
-                </button>
-                <span style={{ color: C.border }}>|</span>
                 <div className="flex items-center gap-1 text-sm">
                     {TIMER_OPTIONS.map(opt => (
                         <button key={String(opt.value)} onClick={() => { setTimerOption(opt.value); handleRestart(); }}
@@ -286,7 +301,6 @@ export default function App() {
                         </button>
                     ))}
                 </div>
-                <span style={{ color: C.border }}>|</span>
                 <div className="relative">
                     <input ref={searchInputRef} type="text" value={searchQuery}
                         onChange={e => handleSearchInput(e.target.value)}
@@ -326,9 +340,6 @@ export default function App() {
 
             {/* Main typing area */}
             <main className="flex-1 flex flex-col items-center justify-center px-8 py-6">
-                {currentTrack && (
-                    <p className="text-xs mb-6" style={{ color: C.sub }}>{currentTrack.name} — {currentTrack.artist}</p>
-                )}
                 <div className="flex items-center gap-6 mb-6">
                     {timerOption !== 'full' && (
                         <span className="text-3xl font-bold" style={{ color: C.accent }}>
@@ -346,14 +357,12 @@ export default function App() {
                 {loadingLyrics ? (
                     <p className="text-sm" style={{ color: C.sub }}>loading lyrics...</p>
                 ) : words.length > 0 ? (
-                    <div className="w-full flex justify-center">
-                        <TypingRenderer
-                            wordStates={wordStates}
-                            currentWordIndex={currentWordIndex}
-                            currentCharIndex={currentCharIndex}
-                            mode="structured"
-                        />
-                    </div>
+                    <TypingRenderer
+                        wordStates={wordStates}
+                        currentWordIndex={currentWordIndex}
+                        currentCharIndex={currentCharIndex}
+                        mode="structured"
+                    />
                 ) : (
                     <p className="text-sm" style={{ color: C.sub }}>no lyrics loaded</p>
                 )}
@@ -498,7 +507,7 @@ function TypingRenderer({
         <div
             ref={containerRef}
             className="overflow-hidden relative"
-            style={{ width: '70%', maxHeight: '280px', margin: '0 auto', textAlign: 'left' }}
+            style={{ width: '65%', maxWidth: '900px', maxHeight: '280px', margin: '0 auto', textAlign: 'left' }}
         >
             <div className="space-y-3">
                 {lines.slice(startLine, endLine).map((line, li) => {
