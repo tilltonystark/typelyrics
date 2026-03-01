@@ -135,6 +135,8 @@ export function useTypingEngine({
         const nextIdx = fromWordIdx + 1;
         if (nextIdx >= words.length) {
             setIsComplete(true);
+            // Stop recording WPM history — session has ended
+            clearInterval(historyIntervalRef.current);
             setTimeout(() => onSessionComplete?.(calculateStats()), 50);
         } else {
             setCurrentWordIndex(nextIdx);

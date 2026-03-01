@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { SessionResult, TimerOption } from '../types';
 import { useEffect, useRef, useMemo } from 'react';
+import type { User } from 'firebase/auth';
 
 const C = {
     bg: '#323437',
@@ -14,6 +15,7 @@ const C = {
 
 interface ResultsScreenProps {
     result: SessionResult;
+    user?: User | null;
     onReplay: () => void;
     onNewSong: () => void;
 }
@@ -139,7 +141,7 @@ function WpmChart({ history }: { history: { time: number; wpm: number; raw: numb
 }
 
 
-export default function ResultsScreen({ result, onReplay, onNewSong }: ResultsScreenProps) {
+export default function ResultsScreen({ result, user, onReplay, onNewSong }: ResultsScreenProps) {
     // Keyboard shortcuts on results screen
     const tabRef = useRef(false);
     useEffect(() => {
@@ -158,11 +160,19 @@ export default function ResultsScreen({ result, onReplay, onNewSong }: ResultsSc
     return (
         <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: C.bg, color: C.text, fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
 
-            {/* Logo at the top */}
-            <header className="absolute top-0 left-0 w-full px-8 py-5">
+            {/* Logo + user profile at the top */}
+            <header className="absolute top-0 left-0 w-full px-8 py-5 flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.accent }}>
                     lyricstype
                 </h1>
+                {user && (
+                    <div className="flex items-center gap-2.5">
+                        {user.photoURL && (
+                            <img src={user.photoURL} alt={user.displayName || ''} className="w-8 h-8 rounded-full" />
+                        )}
+                        <span className="text-xs" style={{ color: C.sub }}>{user.displayName || user.email}</span>
+                    </div>
+                )}
             </header>
 
             <motion.div

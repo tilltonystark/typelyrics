@@ -82,6 +82,10 @@ export default function App() {
     } = useTypingEngine({
         words, mode: 'structured',
         onSessionComplete: (finalStats) => {
+            // Stop Spotify when session ends
+            if (spotify.state.connected && spotify.state.playing) {
+                spotify.pause();
+            }
             setSessionResult({
                 trackName: currentTrack?.name || 'Unknown',
                 artistName: currentTrack?.artist || 'Unknown',
@@ -107,6 +111,10 @@ export default function App() {
                 setTimeRemaining(prev => {
                     if (prev === null || prev <= 1) {
                         clearInterval(timerRef.current);
+                        // Stop Spotify when timer runs out
+                        if (spotify.state.connected && spotify.state.playing) {
+                            spotify.pause();
+                        }
                         setSessionResult({
                             trackName: currentTrack?.name || 'Unknown', artistName: currentTrack?.artist || 'Unknown',
                             mode: 'structured', avgWpm: stats.wpm, accuracy: stats.accuracy, tempoStability: stats.tempoStability,
@@ -238,6 +246,7 @@ export default function App() {
         return (
             <ResultsScreen
                 result={sessionResult}
+                user={user}
                 onReplay={handleRestart}
                 onNewSong={handleNewSong}
             />
@@ -372,10 +381,23 @@ export default function App() {
                                     key={currentTrack.id || currentTrack.name}
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    className="flex items-center gap-2"
+                                    className="flex items-center gap-3"
                                 >
-                                    <span className="text-lg font-bold truncate" style={{ color: C.text }}>{currentTrack.name}</span>
-                                    <span className="text-sm truncate" style={{ color: C.sub }}>by {currentTrack.artist}</span>
+                                    <div className="flex flex-col">
+                                        <span
+                                            className="font-bold uppercase tracking-widest truncate"
+                                            style={{ color: C.sub, fontSize: '11px', letterSpacing: '0.12em' }}
+                                        >
+                                            ♪ now playing
+                                        </span>
+                                        <span
+                                            className="font-sans truncate"
+                                            style={{ color: C.text, fontSize: '15px', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500 }}
+                                        >
+                                            {currentTrack.name}
+                                            <span style={{ color: C.sub, fontWeight: 400, fontSize: '13px' }}> · {currentTrack.artist}</span>
+                                        </span>
+                                    </div>
                                 </motion.div>
                             </AnimatePresence>
                         )}
