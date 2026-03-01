@@ -58,6 +58,7 @@ export default function App() {
     const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
     const [spotifyNudge, setSpotifyNudge] = useState(false);
     const [spotifyLoading, setSpotifyLoading] = useState(false);
+    const [musicMode, setMusicMode] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<TrackSearchResult[]>([]);
@@ -78,7 +79,7 @@ export default function App() {
 
     const {
         wordStates, currentWordIndex, currentCharIndex,
-        stats, isComplete, isStarted, handleKeyDown, reset: resetTyping,
+        stats, isComplete, isStarted, handleKeyDown, reset: resetTyping, stop: stopTyping,
     } = useTypingEngine({
         words, mode: 'structured',
         onSessionComplete: (finalStats) => {
@@ -111,7 +112,8 @@ export default function App() {
                 setTimeRemaining(prev => {
                     if (prev === null || prev <= 1) {
                         clearInterval(timerRef.current);
-                        // Stop Spotify when timer runs out
+                        // Stop WPM recording and Spotify when timer runs out
+                        stopTyping();
                         if (spotify.state.connected && spotify.state.playing) {
                             spotify.pause();
                         }
@@ -223,7 +225,10 @@ export default function App() {
                 setSpotifyLoading(true);
                 try {
                     if (currentTrack) {
-                        const uri = await spotify.searchTrack(currentTrack.name, currentTrack.artist);
+                        const searchQuery = musicMode
+                            ? `${currentTrack.name} ${currentTrack.artist} instrumental`
+                            : `${currentTrack.name} ${currentTrack.artist}`;
+                        const uri = await spotify.searchTrack(searchQuery, '');
                         if (uri) await spotify.play(uri);
                         else spotify.resume();
                     } else {
@@ -237,7 +242,7 @@ export default function App() {
             setSpotifyNudge(true);
             setTimeout(() => setSpotifyNudge(false), 5000);
         }
-    }, [spotify, currentTrack]);
+    }, [spotify, currentTrack, musicMode]);
 
     const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -262,6 +267,22 @@ export default function App() {
                     lyricstype
                 </h1>
                 <div className="flex items-center gap-3">
+                    {/* Music mode toggle */}
+                    {spotify.state.connected && (
+                        <button
+                            onClick={() => setMusicMode(m => !m)}
+                            className="text-xs px-2.5 py-1.5 rounded transition-all flex items-center gap-1"
+                            style={{
+                                background: musicMode ? C.accent + '20' : 'transparent',
+                                color: musicMode ? C.accent : C.sub,
+                                border: `1px solid ${musicMode ? C.accent + '40' : C.border}`,
+                            }}
+                            title={musicMode ? 'Music mode ON — instrumental version' : 'Music mode OFF — full song with vocals'}
+                        >
+                            🎵 {musicMode ? 'music' : 'vocals'}
+                        </button>
+                    )}
+
                     {/* Spotify play/pause */}
                     <div className="relative">
                         <button

@@ -17,6 +17,7 @@ interface UseTypingEngineReturn {
     isStarted: boolean;
     handleKeyDown: (e: KeyboardEvent) => void;
     reset: () => void;
+    stop: () => void;
 }
 
 function initWordStates(words: WordSegment[]): WordState[] {
@@ -266,6 +267,11 @@ export function useTypingEngine({
         clearInterval(historyIntervalRef.current);
     }, [words]);
 
+    const stop = useCallback(() => {
+        clearInterval(historyIntervalRef.current);
+        setIsComplete(true);
+    }, []);
+
     return {
         wordStates,
         currentWordIndex,
@@ -275,5 +281,6 @@ export function useTypingEngine({
         isStarted,
         handleKeyDown,
         reset,
+        stop,
     };
 }
