@@ -187,6 +187,15 @@ export function useTypingEngine({
             const newStates = [...prev];
             const currentWord = { ...newStates[currentWordIndex] };
             const targetWord = currentWord.segment.word;
+            const isInitialSpaceStart = key === ' ' &&
+                currentWordIndex === 0 &&
+                currentCharIndex === 0 &&
+                currentWord.typedChars.length === 0;
+
+            // Allow space bar to start timer/session without skipping the first word.
+            if (isInitialSpaceStart) {
+                return newStates;
+            }
 
             if (key === 'Backspace') {
                 if (isWordDeleteShortcut && currentCharIndex > 0) {

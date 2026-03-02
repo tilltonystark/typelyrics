@@ -69,3 +69,45 @@ input::placeholder {
     transform: rotate(360deg);
   }
 }
+
+.seek-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  height: 14px;
+}
+
+.seek-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: #2a2a2a;
+  border: none;
+}
+
+.seek-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1DB954;
+  border: none;
+  margin-top: -3px;
+}
+
+.seek-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: #2a2a2a;
+  border: none;
+}
+
+.seek-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1DB954;
+  border: none;
+}

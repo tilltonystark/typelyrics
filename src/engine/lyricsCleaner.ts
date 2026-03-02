@@ -1,13 +1,12 @@
 /**
- * Lyrics cleaner — lowercases, removes punctuation, and transliterates
+ * Lyrics cleaner — lowercases, transliterates
  * non-Latin scripts (Devanagari, Gurmukhi, Bengali, Tamil, Telugu, etc.)
  * to Hinglish-style romanized Latin text.
  *
- * Any character that isn't a basic Latin letter (a-z), digit, or space
- * is stripped as a final safety net so only typeable characters remain.
+ * Keeps apostrophes used inside words (e.g. "you're"), while removing
+ * most other punctuation/non-typeable symbols.
  */
-
-const PUNCTUATION_RE = /[.,!?;:'"()\[\]{}\-—–…\u201C\u201D\u2018\u2019\u00AB\u00BB\u2039\u203A&@#$%^*+=|\\\/<>~`]/g;
+const PUNCTUATION_RE = /[.,!?;:"()\[\]{}\-—–…\u201C\u201D\u00AB\u00BB\u2039\u203A&@#$%^*+=|\\\/<>~`]/g;
 
 // ── Devanagari (Hindi, Marathi, Sanskrit) ──
 const DEVANAGARI_MAP: Record<string, string> = {
@@ -155,18 +154,20 @@ function transliterateIndic(text: string): string {
 }
 
 /**
- * Final safety: strip any character that isn't a basic Latin letter, digit, or space.
+ * Final safety: strip any character that isn't a basic Latin letter, digit, apostrophe, or space.
  * This ensures only keyboard-typeable characters remain.
  */
 function stripNonLatin(text: string): string {
-    return text.replace(/[^a-z0-9 ]/g, '');
+    return text.replace(/[^a-z0-9' ]/g, '');
 }
 
 export function cleanLine(line: string): string {
     let cleaned = line.toLowerCase();
     cleaned = transliterateIndic(cleaned);
+    cleaned = cleaned.replace(/[\u2018\u2019]/g, "'");
     cleaned = cleaned
         .replace(PUNCTUATION_RE, '')
+        .replace(/(^|\s)'|'(\s|$)/g, '$1$2')
         .replace(/\s+/g, ' ')
         .trim();
     // Final cleanup: remove any surviving non-Latin characters

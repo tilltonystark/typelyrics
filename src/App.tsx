@@ -346,9 +346,27 @@ export default function App() {
         loadSong(track.track_name, track.id);
     }, [loadSong, spotify]);
 
-    const handleRestart = useCallback(() => {
-        resetTyping(); setTimeRemaining(null); setScreen('typing');
-    }, [resetTyping]);
+    const handleRestart = useCallback(async () => {
+        resetTyping();
+        setTimeRemaining(null);
+        setScreen('typing');
+        const trackLoaded = Boolean(currentTrack?.id && linkedTrackId === currentTrack.id);
+        if (spotify.state.connected && trackLoaded) {
+            spotify.seek(Math.max(0, Math.round(seekStartSec * 1000)));
+            return;
+        }
+        if (spotify.state.connected && currentTrack) {
+            try {
+                const uri = await spotify.searchTrack(currentTrack.name, currentTrack.artist);
+                if (uri) {
+                    await spotify.play(uri, Math.max(0, Math.round(seekStartSec * 1000)));
+                    if (currentTrack.id) setLinkedTrackId(currentTrack.id);
+                }
+            } catch {
+                // keep restart resilient even if Spotify reload fails
+            }
+        }
+    }, [resetTyping, spotify, seekStartSec, currentTrack, linkedTrackId]);
 
     const handleNewSong = useCallback(() => {
         if (spotify.state.connected && spotify.state.playing) {
@@ -423,6 +441,29 @@ export default function App() {
     const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     const canAdjustSeek = Boolean(lyrics?.synced) && !isStarted;
     const shouldFollowSong = isSameTrackLoaded && spotify.state.connected && (spotify.state.playing || spotify.state.positionMs > 0);
+    const showGhostCursor = isSameTrackLoaded && spotify.state.connected && spotify.state.playing;
+    const songPlaybackSec = spotify.state.positionMs / 1000;
+
+    const ghostCursor = useMemo(() => {
+        if (!showGhostCursor || words.length === 0) return null;
+
+        const absoluteProgressSec = shouldFollowSong
+            ? songPlaybackSec
+            : seekStartSec + (stats.elapsedMs / 1000);
+        const timelineSec = Math.max(0, absoluteProgressSec - seekStartSec);
+
+        let ghostWordIndex = words.findIndex(w => (w.endTime - seekStartSec) > timelineSec);
+        if (ghostWordIndex === -1) ghostWordIndex = words.length - 1;
+        const ghostWord = words[ghostWordIndex];
+        if (!ghostWord) return null;
+
+        const wordStartSec = Math.max(0, ghostWord.startTime - seekStartSec);
+        const wordDuration = Math.max(ghostWord.duration, 0.05);
+        const wordProgress = Math.max(0, Math.min((timelineSec - wordStartSec) / wordDuration, 1));
+        const ghostCharIndex = Math.min(ghostWord.word.length, Math.floor(wordProgress * ghostWord.word.length));
+
+        return { wordIndex: ghostWordIndex, charIndex: ghostCharIndex };
+    }, [showGhostCursor, words, songPlaybackSec, seekStartSec]);
 
     const handleOpenHistory = useCallback(() => {
         const sessions = getSessions();
@@ -439,6 +480,10 @@ export default function App() {
             <ResultsScreen
                 result={sessionResult}
                 user={user}
+                authLoading={authLoading}
+                onSignIn={signInWithGoogle}
+                onSignOut={signOut}
+                onLogoClick={handleNewSong}
                 onReplay={handleRestart}
                 onNewSong={handleNewSong}
             />
@@ -449,15 +494,16 @@ export default function App() {
         <div className="min-h-screen flex flex-col" style={{ background: C.bg, color: C.text, fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
 
             {/* Header */}
-            <header className="flex items-center justify-between px-8 py-5">
-                <h1 onClick={handleNewSong} className="text-2xl font-bold cursor-pointer tracking-tight" style={{ color: C.accent }}>
-                    lyricstype
-                </h1>
-                <div className="flex items-center gap-3">
+            <header className="w-full px-6 py-6">
+                <div className="w-full max-w-[960px] mx-auto flex items-center justify-between">
+                    <h1 onClick={handleNewSong} className="text-[18px] font-bold cursor-pointer tracking-tight" style={{ color: C.accent }}>
+                        typelyrics
+                    </h1>
+                    <div className="flex items-center gap-3">
                     <div className="relative" ref={myListPanelRef}>
                         <button
                             onClick={() => setShowMyList(prev => !prev)}
-                            className="text-xs px-3 py-1.5 rounded transition-all"
+                                className="text-xs px-3 py-2 rounded transition-all"
                             style={{
                                 background: showMyList ? C.card : 'transparent',
                                 color: showMyList ? C.accent : C.sub,
@@ -518,7 +564,7 @@ export default function App() {
                                     )}
                                     <button
                                         onClick={focusSearch}
-                                        className="mt-3 px-3 py-1.5 rounded inline-block no-underline text-center w-full cursor-pointer text-xs"
+                                        className="mt-3 px-3 py-2 rounded inline-block no-underline text-center w-full cursor-pointer text-xs"
                                         style={{ background: C.bg, color: C.text, border: `1px solid ${C.border}` }}
                                     >
                                         Add from search
@@ -529,7 +575,7 @@ export default function App() {
                     </div>
 
                     {/* Auth */}
-                    {authLoading ? null : user ? (
+                        {authLoading ? null : user ? (
                         <div className="relative" ref={profileMenuRef}>
                             <button
                                 onClick={() => setShowProfileMenu(prev => !prev)}
@@ -567,14 +613,16 @@ export default function App() {
                                 )}
                             </AnimatePresence>
                         </div>
-                    ) : (
-                        <button onClick={signInWithGoogle} className="text-xs px-3 py-1.5 rounded" style={{ background: '#fff', color: '#333' }}>sign in</button>
-                    )}
+                        ) : (
+                            <button onClick={signInWithGoogle} className="text-xs px-3 py-2 rounded" style={{ background: '#fff', color: '#333' }}>sign in</button>
+                        )}
+                    </div>
                 </div>
             </header>
 
             {/* Options bar */}
-            <div className="flex items-center justify-center gap-4 px-8 py-3">
+            <div className="w-full px-6 py-2">
+                <div className="w-full max-w-[960px] mx-auto flex items-center gap-4">
                 <div className="flex items-center gap-1 text-sm">
                     {TIMER_OPTIONS.map(opt => (
                         <button key={String(opt.value)} onClick={() => { setTimerOption(opt.value); handleRestart(); }}
@@ -589,7 +637,7 @@ export default function App() {
                         onChange={e => handleSearchInput(e.target.value)}
                         onFocus={() => searchResults.length > 0 && setShowResults(true)}
                         onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                        placeholder="search song..." className="px-3 py-1.5 rounded text-sm outline-none w-48"
+                        placeholder="search song..." className="px-3 py-2 rounded text-sm outline-none w-48"
                         style={{ background: C.card, color: C.text, border: 'none' }}
                     />
                     {searching && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs" style={{ color: C.sub }}>...</span>}
@@ -600,7 +648,7 @@ export default function App() {
                                 style={{ background: C.card, border: `1px solid ${C.border}` }}>
                                 {searchResults.map(track => (
                                     <div key={track.id}
-                                        className="group w-full px-3 py-2.5 flex items-center justify-between transition-colors"
+                                        className="group w-full px-3 py-3 flex items-center justify-between transition-colors"
                                         style={{ borderBottom: `1px solid ${C.border}` }}
                                         onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -625,13 +673,13 @@ export default function App() {
                                         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                                             <button
                                                 onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleSavedTrack(track); }}
-                                                className="text-base transition-opacity opacity-0 group-hover:opacity-100"
+                                                className="h-8 w-8 rounded-full flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
                                                 style={{ color: isSavedTrack(track.id) ? C.accent : C.sub }}
                                                 title={isSavedTrack(track.id) ? 'Remove from my list' : 'Save to my list'}
                                             >
-                                                {isSavedTrack(track.id) ? '★' : '☆'}
+                                                <BookmarkIcon active={isSavedTrack(track.id)} />
                                             </button>
-                                            {track.has_synced_lyrics && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: C.bg, color: C.accent }}>synced</span>}
+                                            {track.has_synced_lyrics && <span className="text-xs px-2 py-1 rounded" style={{ background: C.bg, color: C.accent }}>synced</span>}
                                             {track.duration > 0 && <span className="text-xs" style={{ color: C.sub }}>{formatTime(track.duration)}</span>}
                                         </div>
                                     </div>
@@ -641,14 +689,21 @@ export default function App() {
                     </AnimatePresence>
                 </div>
                 {/* Removed flow mode audio upload button */}
+                </div>
             </div>
 
             {/* Main typing area */}
-            <main className="flex-1 flex flex-col items-center justify-center px-8 py-6 w-full max-w-5xl mx-auto">
+            <main className="flex-1 w-full px-6 pt-6 pb-6">
+                <div className="w-full max-w-[960px] mx-auto flex flex-col gap-6">
                 {/* Song Info & Stats Header */}
-                <div className="flex items-center w-full mb-8 gap-6">
-                    {/* Left: Song Info */}
-                    <div className="min-w-0">
+                <div className="flex items-start w-full gap-6">
+                    {/* Left: Song Info + Seek */}
+                    <div className="w-fit min-w-0 max-w-[640px] space-y-4">
+                        {timerOption !== 'full' && (
+                            <div className="text-xl font-bold font-mono" style={{ color: C.accent }}>
+                                {timeRemaining !== null ? formatTime(timeRemaining) : formatTime(timerOption as number)}
+                            </div>
+                        )}
                         {currentTrack && (
                             <AnimatePresence mode="popLayout">
                                 <motion.div
@@ -657,20 +712,22 @@ export default function App() {
                                     animate={{ opacity: 1, x: 0 }}
                                     className="flex items-center gap-3"
                                 >
-                                    <button
-                                        onClick={handleSpotifyClick}
-                                        disabled={spotifyLoading}
-                                        className="h-8 w-8 rounded-full flex items-center justify-center text-sm"
-                                        style={{
-                                            background: spotify.state.connected ? (spotify.state.playing ? '#1DB954' : C.card) : 'transparent',
-                                            color: spotify.state.connected ? (spotify.state.playing ? '#fff' : '#1DB954') : '#1DB954',
-                                            border: spotify.state.connected ? 'none' : '1px solid #1DB95440',
-                                            opacity: spotifyLoading ? 0.6 : 1,
-                                        }}
-                                        title={spotify.state.connected ? (spotify.state.playing ? 'Pause Spotify' : 'Play from Spotify') : 'Connect Spotify'}
-                                    >
-                                        {spotify.state.connected ? (spotify.state.playing ? '⏸' : '▶') : '♫'}
-                                    </button>
+                                    {spotify.state.connected && (
+                                        <button
+                                            onClick={handleSpotifyClick}
+                                            disabled={spotifyLoading}
+                                            className="h-8 w-8 rounded-full flex items-center justify-center text-sm"
+                                            style={{
+                                                background: spotify.state.playing ? '#1DB954' : C.card,
+                                                color: spotify.state.playing ? '#fff' : '#1DB954',
+                                                border: 'none',
+                                                opacity: spotifyLoading ? 0.6 : 1,
+                                            }}
+                                            title={spotify.state.playing ? 'Pause Spotify' : 'Play from Spotify'}
+                                        >
+                                            {spotify.state.playing ? '⏸' : '▶'}
+                                        </button>
+                                    )}
                                     {loadingLyrics ? (
                                         <span className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0" style={{ background: C.border }}>
                                             <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full" style={{ color: C.accent, animation: 'spin 0.6s linear infinite' }} />
@@ -680,24 +737,42 @@ export default function App() {
                                     ) : (
                                         <span className="w-10 h-10 rounded flex items-center justify-center text-xs flex-shrink-0" style={{ background: C.border, color: C.sub }}>♪</span>
                                     )}
-                                    <div className="flex flex-col">
+                                    <div className="flex flex-col min-w-0">
                                         <span
                                             className="font-bold uppercase tracking-widest truncate"
                                             style={{ color: C.sub, fontSize: '11px', letterSpacing: '0.12em' }}
                                         >
                                             ♪ now playing
                                         </span>
-                                        <span
-                                            className="font-sans truncate"
-                                            style={{ color: C.text, fontSize: '15px', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500 }}
-                                        >
-                                            {currentTrack.name}
-                                            <span style={{ color: C.sub, fontWeight: 400, fontSize: '13px' }}> · {currentTrack.artist}</span>
-                                        </span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span
+                                                className="font-sans truncate"
+                                                style={{ color: C.text, fontSize: '15px', fontFamily: 'Inter, system-ui, sans-serif', fontWeight: 500 }}
+                                            >
+                                                {currentTrack.name}
+                                                <span style={{ color: C.sub, fontWeight: 400, fontSize: '13px' }}> · {currentTrack.artist}</span>
+                                            </span>
+                                            {!spotify.state.connected && (
+                                                <button
+                                                    onClick={handleSpotifyClick}
+                                                    disabled={spotifyLoading}
+                                                    className="px-2 py-1 rounded text-[11px] uppercase tracking-wide flex-shrink-0"
+                                                    style={{
+                                                        background: 'transparent',
+                                                        color: '#1DB954',
+                                                        border: '1px solid #1DB95466',
+                                                        opacity: spotifyLoading ? 0.6 : 1,
+                                                    }}
+                                                    title="Connect it to play the song. Spotify Premium needed."
+                                                >
+                                                    connect spotify
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <button
                                         onClick={handleCurrentTrackBookmark}
-                                        className="h-8 w-8 rounded-full flex items-center justify-center text-lg"
+                                        className="h-8 w-8 rounded-full flex items-center justify-center"
                                         style={{
                                             background: C.card,
                                             color: isSavedTrack(currentTrack.id) ? C.accent : C.sub,
@@ -705,17 +780,14 @@ export default function App() {
                                         }}
                                         title={isSavedTrack(currentTrack.id) ? 'Remove from my list' : 'Save to my list'}
                                     >
-                                        {isSavedTrack(currentTrack.id) ? '★' : '☆'}
+                                        <BookmarkIcon active={isSavedTrack(currentTrack.id)} />
                                     </button>
                                 </motion.div>
                             </AnimatePresence>
                         )}
-                    </div>
-
-                    {/* Center: Seek bar */}
-                    {lyrics && (
-                        <div className="flex-1 min-w-[220px] max-w-3xl">
-                            <div className="flex items-center gap-3 text-xs">
+                        {lyrics && (
+                            <div className="w-[480px] max-w-full">
+                                <div className="flex items-center gap-3 text-xs">
                                 <span style={{ color: C.sub }}>start</span>
                                 <input
                                     type="range"
@@ -725,7 +797,7 @@ export default function App() {
                                     value={Math.min(shouldFollowSong ? songProgressSec : seekStartSec, lyrics.duration || 0)}
                                     disabled={!canAdjustSeek}
                                     onChange={(e) => handleSeekStartChange(Number(e.target.value))}
-                                    className="flex-1 accent-green-500"
+                                    className="flex-1 seek-slider"
                                     title={!lyrics.synced ? 'Seek requires synced lyrics for reliable alignment' : isStarted ? 'Locked after typing starts' : 'Choose where practice starts'}
                                 />
                                 <span className="font-mono" style={{ color: C.text }}>{formatTime(Math.round(shouldFollowSong ? songProgressSec : seekStartSec))}</span>
@@ -733,15 +805,11 @@ export default function App() {
                                 {!lyrics.synced && <span style={{ color: C.sub }}>sync required</span>}
                             </div>
                         </div>
-                    )}
+                        )}
+                    </div>
 
                     {/* Right: Stats */}
                     <div className="flex items-center gap-6 justify-end flex-shrink-0">
-                        {timerOption !== 'full' && (
-                            <span className="text-3xl font-bold font-mono" style={{ color: C.accent }}>
-                                {timeRemaining !== null ? formatTime(timeRemaining) : formatTime(timerOption as number)}
-                            </span>
-                        )}
                         {isStarted && (
                             <>
                                 <span className="text-lg font-mono" style={{ color: C.text }}>{stats.wpm} <span className="text-xs font-sans" style={{ color: C.sub }}>wpm</span></span>
@@ -754,26 +822,37 @@ export default function App() {
                 {loadingLyrics ? (
                     <p className="text-sm" style={{ color: C.sub }}>loading lyrics...</p>
                 ) : words.length > 0 ? (
-                    <TypingRenderer
-                        wordStates={wordStates}
-                        currentWordIndex={currentWordIndex}
-                        currentCharIndex={currentCharIndex}
-                        mode="structured"
-                    />
+                    <div className="w-full">
+                        <TypingRenderer
+                            wordStates={wordStates}
+                            currentWordIndex={currentWordIndex}
+                            currentCharIndex={currentCharIndex}
+                            ghostWordIndex={ghostCursor?.wordIndex ?? null}
+                            ghostCharIndex={ghostCursor?.charIndex ?? null}
+                            showGhostCursor={showGhostCursor}
+                            mode="structured"
+                        />
+                        {!isStarted && (
+                            <p className="mt-3 text-xs text-center" style={{ color: C.sub }}>
+                                Press "space bar" to start typing.
+                            </p>
+                        )}
+                    </div>
                 ) : (
                     <p className="text-sm" style={{ color: C.sub }}>no lyrics loaded</p>
                 )}
 
                 <button onClick={handleRestart}
-                    className="mt-8 text-lg transition-opacity hover:opacity-100"
+                    className="text-lg transition-opacity hover:opacity-100"
                     style={{ color: C.sub, opacity: 0.5 }} title="Restart (Tab + Enter)">
                     ↻
                 </button>
+                </div>
             </main>
 
             {/* Footer */}
-            <footer className="px-8 py-4 flex flex-col items-center justify-center gap-2">
-                <div className="flex items-center gap-4">
+            <footer className="w-full px-6 py-4">
+                <div className="w-full max-w-[960px] mx-auto flex items-center gap-4">
                     <KeyBadge keys={['tab']} /> <span style={{ color: C.sub }}>+</span>
                     <KeyBadge keys={['enter']} />
                     <span className="text-xs" style={{ color: C.sub }}>— restart test</span>
@@ -808,20 +887,36 @@ function KeyBadge({ keys }: { keys: string[] }) {
     return (
         <span className="flex gap-1">
             {keys.map(k => (
-                <span key={k} className="text-[10px] px-1.5 py-0.5 rounded"
+                <span key={k} className="text-[10px] px-2 py-1 rounded"
                     style={{ background: C.card, color: C.sub, border: `1px solid ${C.border}` }}>{k}</span>
             ))}
         </span>
     );
 }
 
+function BookmarkIcon({ active }: { active: boolean }) {
+    return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path
+                d="M7 4.75C7 4.06 7.56 3.5 8.25 3.5H15.75C16.44 3.5 17 4.06 17 4.75V20.2C17 20.58 16.57 20.8 16.25 20.58L12 17.6L7.75 20.58C7.43 20.8 7 20.58 7 20.2V4.75Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
 // ── Typing Renderer: 5 lines visible, last faded, smooth cursor ──
 function TypingRenderer({
-    wordStates, currentWordIndex, currentCharIndex,
+    wordStates, currentWordIndex, currentCharIndex, ghostWordIndex, ghostCharIndex, showGhostCursor,
 }: {
     wordStates: import('./types').WordState[];
     currentWordIndex: number;
     currentCharIndex: number;
+    ghostWordIndex?: number | null;
+    ghostCharIndex?: number | null;
+    showGhostCursor?: boolean;
     mode: TypingMode;
 }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -853,7 +948,7 @@ function TypingRenderer({
             const offset = lineRect.top - containerRect.top;
             if (offset > 60 || offset < 0) {
                 container.scrollTo({
-                    top: container.scrollTop + offset - 20,
+                    top: container.scrollTop + offset - 24,
                     behavior: 'smooth',
                 });
             }
@@ -874,11 +969,27 @@ function TypingRenderer({
         />
     );
 
+    const GhostCursor = ({ position }: { position: 'before' | 'after' }) => (
+        <span
+            className="absolute top-[4px] bottom-[4px] w-[1.5px] rounded-full"
+            style={{
+                background: '#8a8c90',
+                [position === 'before' ? 'left' : 'right']: '-1px',
+                zIndex: 1,
+                pointerEvents: 'none',
+            }}
+        />
+    );
+
     const renderChar = (char: string, ci: number, ws: typeof wordStates[0], isCurrentWord: boolean) => {
         const state = ws.chars[ci];
         const isAtCursor = isCurrentWord && ci === currentCharIndex && state === 'current';
         const isAfterLastChar = isCurrentWord && ci === ws.segment.word.length - 1 &&
             currentCharIndex >= ws.segment.word.length && (state === 'correct' || state === 'incorrect');
+        const isGhostWord = Boolean(showGhostCursor) && ws.segment.globalIndex === ghostWordIndex;
+        const isAtGhostCursor = isGhostWord && ci === ghostCharIndex;
+        const isGhostAfterLastChar = isGhostWord && ci === ws.segment.word.length - 1 &&
+            (ghostCharIndex ?? 0) >= ws.segment.word.length;
 
         let color = C.sub;
         if (state === 'correct') color = C.text;
@@ -887,6 +998,7 @@ function TypingRenderer({
         return (
             <span key={ci} className="relative inline-block">
                 {isAtCursor && <Cursor position="before" />}
+                {isAtGhostCursor && <GhostCursor position="before" />}
                 <span style={{
                     color,
                     background: state === 'incorrect' ? 'rgba(202,71,84,0.15)' : 'transparent',
@@ -895,6 +1007,7 @@ function TypingRenderer({
                     {char}
                 </span>
                 {isAfterLastChar && <Cursor position="after" />}
+                {isGhostAfterLastChar && <GhostCursor position="after" />}
             </span>
         );
     };
