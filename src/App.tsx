@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ChangeEvent } from 'react';
 import { TrackSearchResult, LyricsData, TypingMode, TimerOption, SessionResult } from './types';
 import { buildWordSegments } from './engine/lyricsParser';
 import { cleanAllLyrics } from './engine/lyricsCleaner';
 import { useTypingEngine } from './engine/useTypingEngine';
 import { useAuth } from './auth/useAuth';
 import { useSpotifyPlayer } from './engine/useSpotifyPlayer';
-import { getAudioEngine } from './engine/AudioEngine';
 import ResultsScreen from './screens/ResultsScreen';
 
 const DEFAULT_SONGS = [
@@ -37,8 +35,7 @@ const TIMER_OPTIONS: { label: string; value: TimerOption }[] = [
     { label: '120', value: 120 },
     { label: 'full', value: 'full' },
 ];
-const SPEED_OPTIONS = [0.25, 0.5, 1, 1.5, 2] as const;
-const AUDIO_ACCEPT = 'audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio/aac';
+const MY_LIST_KEY = 'lyritype_my_list';
 
 const C = {
     bg: '#000000',
@@ -50,6 +47,16 @@ const C = {
     border: '#2a2a2a',
 };
 
+interface SavedTrack {
+    id: number;
+    track_name: string;
+    artist_name: string;
+    album_name: string;
+    duration: number;
+    has_synced_lyrics: boolean;
+    has_plain_lyrics: boolean;
+}
+
 export default function App() {
     const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth();
     const spotify = useSpotifyPlayer();
@@ -60,14 +67,9 @@ export default function App() {
     const [timerOption, setTimerOption] = useState<TimerOption>(30);
     const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
     const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
-    const [spotifyNudge, setSpotifyNudge] = useState(false);
-    const [speedNudge, setSpeedNudge] = useState(false);
     const [spotifyLoading, setSpotifyLoading] = useState(false);
-    const [musicMode, setMusicMode] = useState(false);
-    const [playbackRate, setPlaybackRate] = useState<number>(1);
-    const [audioDuration, setAudioDuration] = useState<number | null>(null);
-    const [audioName, setAudioName] = useState<string>('');
-    const [audioLoading, setAudioLoading] = useState(false);
+    const [savedTracks, setSavedTracks] = useState<SavedTrack[]>([]);
+    const [showMyList, setShowMyList] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<TrackSearchResult[]>([]);
@@ -78,36 +80,24 @@ export default function App() {
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
     const timerRef = useRef<ReturnType<typeof setInterval>>();
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const audioInputRef = useRef<HTMLInputElement>(null);
-    const audioEngineRef = useRef(getAudioEngine());
-    const hasStartedAudioRef = useRef(false);
+    const myListPanelRef = useRef<HTMLDivElement>(null);
 
     const words = useMemo(() => {
         if (!lyrics) return [];
         const cleaned = cleanAllLyrics(lyrics.lines);
-        const duration = audioDuration || lyrics.duration || 180;
+        const duration = lyrics.duration || 180;
         return buildWordSegments(cleaned, duration);
-    }, [lyrics, audioDuration]);
+    }, [lyrics]);
 
     const {
         wordStates, currentWordIndex, currentCharIndex,
         stats, isComplete, isStarted, handleKeyDown, reset: resetTyping, stop: stopTyping,
     } = useTypingEngine({
         words, mode: 'structured',
-        onWordComplete: (wordIndex, typingDurationMs) => {
-            if (!audioEngineRef.current.hasAudio()) return;
-            const completedSegment = words[wordIndex];
-            const nextSegment = wordIndex < words.length - 1 ? words[wordIndex + 1] : null;
-            if (!completedSegment) return;
-            audioEngineRef.current.onWordComplete(completedSegment, nextSegment, typingDurationMs, playbackRate);
-        },
         onSessionComplete: (finalStats) => {
             // Stop Spotify when session ends
             if (spotify.state.connected && spotify.state.playing) {
                 spotify.pause();
-            }
-            if (audioEngineRef.current.hasAudio()) {
-                audioEngineRef.current.stop();
             }
             setSessionResult({
                 trackName: currentTrack?.name || 'Unknown',
@@ -139,9 +129,6 @@ export default function App() {
                         if (spotify.state.connected && spotify.state.playing) {
                             spotify.pause();
                         }
-                        if (audioEngineRef.current.hasAudio()) {
-                            audioEngineRef.current.stop();
-                        }
                         setSessionResult({
                             trackName: currentTrack?.name || 'Unknown', artistName: currentTrack?.artist || 'Unknown',
                             mode: 'structured', avgWpm: stats.wpm, accuracy: stats.accuracy, tempoStability: stats.tempoStability,
@@ -164,14 +151,32 @@ export default function App() {
     useEffect(() => { loadSong(getRandomSong()); }, []);
 
     useEffect(() => {
-        if (!isStarted || hasStartedAudioRef.current || !audioEngineRef.current.hasAudio() || words.length === 0) return;
-        audioEngineRef.current.playFirstWord(words[0], playbackRate);
-        hasStartedAudioRef.current = true;
-    }, [isStarted, words, playbackRate]);
+        try {
+            const raw = localStorage.getItem(MY_LIST_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(parsed)) {
+                setSavedTracks(parsed);
+            }
+        } catch {
+            setSavedTracks([]);
+        }
+    }, []);
 
     useEffect(() => {
-        hasStartedAudioRef.current = false;
-    }, [lyrics, words.length]);
+        localStorage.setItem(MY_LIST_KEY, JSON.stringify(savedTracks));
+    }, [savedTracks]);
+
+    useEffect(() => {
+        if (!showMyList) return;
+        const onClickOutside = (e: MouseEvent) => {
+            if (!myListPanelRef.current) return;
+            if (!myListPanelRef.current.contains(e.target as Node)) {
+                setShowMyList(false);
+            }
+        };
+        window.addEventListener('mousedown', onClickOutside);
+        return () => window.removeEventListener('mousedown', onClickOutside);
+    }, [showMyList]);
 
     useEffect(() => {
         if (screen !== 'typing' || !lyrics) return;
@@ -233,24 +238,50 @@ export default function App() {
         setLoadingLyrics(false);
     }, []);
 
+    const toSavedTrack = useCallback((track: TrackSearchResult | SavedTrack): SavedTrack => ({
+        id: track.id,
+        track_name: track.track_name,
+        artist_name: track.artist_name,
+        album_name: track.album_name || '',
+        duration: track.duration || 0,
+        has_synced_lyrics: track.has_synced_lyrics,
+        has_plain_lyrics: track.has_plain_lyrics,
+    }), []);
+
+    const isSavedTrack = useCallback((trackId?: number) => {
+        if (!trackId) return false;
+        return savedTracks.some(t => t.id === trackId);
+    }, [savedTracks]);
+
+    const toggleSavedTrack = useCallback((track: TrackSearchResult | SavedTrack) => {
+        setSavedTracks(prev => {
+            if (prev.some(t => t.id === track.id)) {
+                return prev.filter(t => t.id !== track.id);
+            }
+            return [toSavedTrack(track), ...prev];
+        });
+    }, [toSavedTrack]);
+
     const selectTrack = useCallback((track: TrackSearchResult) => {
         if (spotify.state.connected && spotify.state.playing) {
             spotify.pause();
         }
-        if (audioEngineRef.current.hasAudio()) {
-            audioEngineRef.current.stop();
-        }
         setCurrentTrack({ name: track.track_name, artist: track.artist_name, id: track.id });
         setShowResults(false); setSearchQuery(''); setTimeRemaining(null);
-        hasStartedAudioRef.current = false;
+        loadSong(track.track_name, track.id);
+    }, [loadSong, spotify]);
+
+    const selectSavedTrack = useCallback((track: SavedTrack) => {
+        if (spotify.state.connected && spotify.state.playing) {
+            spotify.pause();
+        }
+        setCurrentTrack({ name: track.track_name, artist: track.artist_name, id: track.id });
+        setShowMyList(false);
+        setTimeRemaining(null);
         loadSong(track.track_name, track.id);
     }, [loadSong, spotify]);
 
     const handleRestart = useCallback(() => {
-        if (audioEngineRef.current.hasAudio()) {
-            audioEngineRef.current.stop();
-        }
-        hasStartedAudioRef.current = false;
         resetTyping(); setTimeRemaining(null); setScreen('typing');
     }, [resetTyping]);
 
@@ -258,106 +289,49 @@ export default function App() {
         if (spotify.state.connected && spotify.state.playing) {
             spotify.pause();
         }
-        if (audioEngineRef.current.hasAudio()) {
-            audioEngineRef.current.stop();
-        }
-        hasStartedAudioRef.current = false;
         setScreen('typing'); setTimeRemaining(null); resetTyping(); searchInputRef.current?.focus();
     }, [resetTyping, spotify]);
 
-    const handleAudioFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setAudioLoading(true);
-        try {
-            const duration = await audioEngineRef.current.loadFile(file);
-            setAudioDuration(duration);
-            setAudioName(file.name);
-            hasStartedAudioRef.current = false;
-            handleRestart();
-        } catch (err) {
-            console.error('Audio load failed:', err);
-        } finally {
-            e.target.value = '';
-            setAudioLoading(false);
-        }
-    }, [handleRestart]);
-
-    const clearAudio = useCallback(() => {
-        audioEngineRef.current.stop();
-        setAudioDuration(null);
-        setAudioName('');
-        hasStartedAudioRef.current = false;
-        handleRestart();
-    }, [handleRestart]);
-
     const handleSpotifyClick = useCallback(async () => {
-        if (spotify.state.connected) {
-            // Toggle play/pause
-            if (spotify.state.playing) {
-                spotify.pause();
-            } else {
-                setSpotifyLoading(true);
-                try {
-                    if (playbackRate !== 1) {
-                        setSpeedNudge(true);
-                        setTimeout(() => setSpeedNudge(false), 5000);
-                    }
-                    if (currentTrack) {
-                        // Try multiple search strategies for instrumental
-                        const queries = musicMode
-                            ? [
-                                `${currentTrack.name} karaoke`,
-                                `${currentTrack.name} instrumental`,
-                                `${currentTrack.name} backing track`,
-                            ]
-                            : [`${currentTrack.name} ${currentTrack.artist}`];
-                        let uri: string | null = null;
-                        for (const q of queries) {
-                            uri = await spotify.searchTrack(q, '');
-                            if (uri) break;
-                        }
-                        if (uri) await spotify.play(uri);
-                        else spotify.resume();
-                    } else {
-                        spotify.resume();
-                    }
-                } catch { /* ignore */ }
-                setSpotifyLoading(false);
-            }
-        } else {
-            // Not connected — show nudge
-            setSpotifyNudge(true);
-            setTimeout(() => setSpotifyNudge(false), 5000);
+        if (!spotify.state.connected) {
+            window.location.href = '/auth/spotify';
+            return;
         }
-    }, [spotify, currentTrack, musicMode, playbackRate]);
+        if (spotify.state.playing) {
+            spotify.pause();
+            return;
+        }
+        setSpotifyLoading(true);
+        try {
+            if (currentTrack) {
+                const uri = await spotify.searchTrack(currentTrack.name, currentTrack.artist);
+                if (uri) await spotify.play(uri);
+                else spotify.resume();
+            } else {
+                spotify.resume();
+            }
+        } catch { /* ignore */ }
+        setSpotifyLoading(false);
+    }, [spotify, currentTrack]);
 
-    // Auto-switch playback when music mode is toggled while playing
-    useEffect(() => {
-        if (!spotify.state.connected || !spotify.state.playing || !currentTrack) return;
-        let cancelled = false;
-        (async () => {
-            setSpotifyLoading(true);
-            try {
-                // Try multiple search strategies for instrumental versions
-                const queries = musicMode
-                    ? [
-                        `${currentTrack.name} karaoke`,
-                        `${currentTrack.name} instrumental`,
-                        `${currentTrack.name} backing track`,
-                    ]
-                    : [`${currentTrack.name} ${currentTrack.artist}`];
-                let uri: string | null = null;
-                for (const q of queries) {
-                    uri = await spotify.searchTrack(q, '');
-                    if (uri && !cancelled) break;
-                }
-                if (uri && !cancelled) await spotify.play(uri);
-            } catch { /* ignore */ }
-            if (!cancelled) setSpotifyLoading(false);
-        })();
-        return () => { cancelled = true; };
-    }, [musicMode]);
+    const handleCurrentTrackBookmark = useCallback(() => {
+        if (!currentTrack?.id) return;
+        const fallbackTrack: SavedTrack = {
+            id: currentTrack.id,
+            track_name: currentTrack.name,
+            artist_name: currentTrack.artist,
+            album_name: '',
+            duration: lyrics?.duration || 0,
+            has_synced_lyrics: Boolean(lyrics?.synced),
+            has_plain_lyrics: Boolean(lyrics),
+        };
+        toggleSavedTrack(fallbackTrack);
+    }, [currentTrack, lyrics, toggleSavedTrack]);
+
+    const focusSearch = useCallback(() => {
+        setShowMyList(false);
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+    }, []);
 
     const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -382,68 +356,72 @@ export default function App() {
                     lyricstype
                 </h1>
                 <div className="flex items-center gap-3">
-                    {/* Music mode toggle */}
-                    {spotify.state.connected && (
+                    <div className="relative" ref={myListPanelRef}>
                         <button
-                            onClick={() => setMusicMode(m => !m)}
-                            className="text-xs px-2.5 py-1.5 rounded transition-all flex items-center gap-1"
+                            onClick={() => setShowMyList(prev => !prev)}
+                            className="text-xs px-3 py-1.5 rounded transition-all"
                             style={{
-                                background: musicMode ? C.accent + '20' : 'transparent',
-                                color: musicMode ? C.accent : C.sub,
-                                border: `1px solid ${musicMode ? C.accent + '40' : C.border}`,
-                            }}
-                            title={musicMode ? 'Music mode ON — instrumental version' : 'Music mode OFF — full song with vocals'}
-                        >
-                            🎵 {musicMode ? 'music' : 'vocals'}
-                        </button>
-                    )}
-
-                    {/* Spotify play/pause */}
-                    <div className="relative">
-                        <button
-                            onClick={handleSpotifyClick}
-                            disabled={spotifyLoading}
-                            className="text-xs px-3 py-1.5 rounded transition-all flex items-center gap-1.5"
-                            style={{
-                                background: spotify.state.connected ? (spotify.state.playing ? '#1DB954' : C.card) : 'transparent',
-                                color: spotify.state.connected ? (spotify.state.playing ? '#fff' : '#1DB954') : '#1DB954',
-                                border: spotify.state.connected ? 'none' : '1px solid #1DB95440',
-                                opacity: spotifyLoading ? 0.6 : 1,
-                                cursor: spotifyLoading ? 'wait' : 'pointer',
+                                background: showMyList ? C.card : 'transparent',
+                                color: showMyList ? C.accent : C.sub,
                             }}
                         >
-                            {spotifyLoading ? (
-                                <><span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" style={{ animation: 'spin 0.6s linear infinite' }} /> loading...</>
-                            ) : spotify.state.connected
-                                ? (spotify.state.playing ? '⏸ pause' : '▶ play')
-                                : '▶ Spotify'
-                            }
+                            my list ({savedTracks.length})
                         </button>
-                        {/* Nudge tooltip */}
                         <AnimatePresence>
-                            {spotifyNudge && (
+                            {showMyList && (
                                 <motion.div
                                     initial={{ opacity: 0, y: -4 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -4 }}
-                                    className="absolute top-full right-0 mt-2 w-64 p-3 rounded text-xs z-50"
+                                    className="absolute top-full right-0 mt-2 w-80 max-h-80 overflow-auto p-3 rounded text-xs z-50"
                                     style={{ background: C.card, border: `1px solid ${C.border}`, color: C.text }}
                                 >
-                                    <p className="mb-2">Connect your Spotify account to play music while typing.</p>
-                                    <p className="mb-3 text-[10px]" style={{ color: C.sub }}>⚠️ Spotify Premium required for in-browser playback</p>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-sm font-medium">Saved Songs</p>
+                                        <button
+                                            onClick={focusSearch}
+                                            className="px-2 py-1 rounded text-[11px]"
+                                            style={{ color: C.accent, background: 'transparent', border: `1px solid ${C.border}` }}
+                                        >
+                                            + add new
+                                        </button>
+                                    </div>
+                                    {savedTracks.length === 0 ? (
+                                        <p style={{ color: C.sub }}>No saved songs yet. Search and bookmark tracks to build your list.</p>
+                                    ) : (
+                                        <div className="space-y-1">
+                                            {savedTracks.map(track => (
+                                                <div key={track.id} className="flex items-center gap-2 rounded px-2 py-2 hover:bg-black/40">
+                                                    <button
+                                                        onMouseDown={() => selectSavedTrack(track)}
+                                                        className="flex-1 text-left min-w-0"
+                                                    >
+                                                        <p className="truncate text-sm" style={{ color: C.text }}>{track.track_name}</p>
+                                                        <p className="truncate text-[11px]" style={{ color: C.sub }}>{track.artist_name}</p>
+                                                    </button>
+                                                    <button
+                                                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleSavedTrack(track); }}
+                                                        className="text-sm px-1"
+                                                        style={{ color: C.sub }}
+                                                        title="Remove from my list"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); window.location.href = '/auth/spotify'; }}
-                                        className="px-3 py-1.5 rounded inline-block no-underline text-center w-full cursor-pointer text-xs"
-                                        style={{ background: '#1DB954', color: '#fff', border: 'none' }}
+                                        onClick={focusSearch}
+                                        className="mt-3 px-3 py-1.5 rounded inline-block no-underline text-center w-full cursor-pointer text-xs"
+                                        style={{ background: C.bg, color: C.text, border: `1px solid ${C.border}` }}
                                     >
-                                        Connect Spotify
+                                        Add from search
                                     </button>
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
-
-                    {/* Removed Spotify now-playing mini to prevent layout shift */}
 
                     {/* Auth */}
                     {authLoading ? null : user ? (
@@ -459,74 +437,6 @@ export default function App() {
 
             {/* Options bar */}
             <div className="flex items-center justify-center gap-4 px-8 py-3">
-                <div className="relative">
-                    <div className="flex items-center gap-1 text-sm">
-                        {SPEED_OPTIONS.map(rate => (
-                            <button
-                                key={rate}
-                                onClick={() => {
-                                    setPlaybackRate(rate);
-                                    if (spotify.state.connected && !audioEngineRef.current.hasAudio() && rate !== 1) {
-                                        setSpeedNudge(true);
-                                        setTimeout(() => setSpeedNudge(false), 5000);
-                                    }
-                                }}
-                                className="px-2 py-1 rounded transition-colors"
-                                style={{
-                                    background: playbackRate === rate ? C.card : 'transparent',
-                                    color: playbackRate === rate ? C.accent : C.sub,
-                                }}
-                                title={rate === 1 ? 'Normal speed' : audioEngineRef.current.hasAudio() ? 'Applied to local per-word audio playback' : 'Spotify Web Playback SDK currently does not support speed changes'}
-                            >
-                                {rate}x
-                            </button>
-                        ))}
-                    </div>
-                    <AnimatePresence>
-                        {speedNudge && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                className="absolute top-full left-0 mt-2 w-72 p-3 rounded text-xs z-50"
-                                style={{ background: C.card, border: `1px solid ${C.border}`, color: C.text }}
-                            >
-                                Spotify playback speed control is not available via the Web Playback SDK/API. Upload local audio to use per-word speed control.
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                    <button
-                        onClick={() => audioInputRef.current?.click()}
-                        className="px-2.5 py-1.5 rounded transition-colors"
-                        style={{ background: C.card, color: audioLoading ? C.sub : C.text }}
-                        disabled={audioLoading}
-                        title="Upload local audio for per-word playback sync"
-                    >
-                        {audioLoading ? 'loading...' : audioName ? 'change audio' : 'upload audio'}
-                    </button>
-                    {audioName && (
-                        <>
-                            <span className="max-w-36 truncate" style={{ color: C.sub }} title={audioName}>{audioName}</span>
-                            <button
-                                onClick={clearAudio}
-                                className="px-2 py-1 rounded"
-                                style={{ background: 'transparent', color: C.sub, border: `1px solid ${C.border}` }}
-                                title="Remove local audio"
-                            >
-                                clear
-                            </button>
-                        </>
-                    )}
-                    <input
-                        ref={audioInputRef}
-                        type="file"
-                        accept={AUDIO_ACCEPT}
-                        className="hidden"
-                        onChange={handleAudioFileChange}
-                    />
-                </div>
                 <div className="flex items-center gap-1 text-sm">
                     {TIMER_OPTIONS.map(opt => (
                         <button key={String(opt.value)} onClick={() => { setTimerOption(opt.value); handleRestart(); }}
@@ -551,20 +461,31 @@ export default function App() {
                                 className="absolute top-full left-0 mt-1 w-80 rounded overflow-hidden z-50"
                                 style={{ background: C.card, border: `1px solid ${C.border}` }}>
                                 {searchResults.map(track => (
-                                    <button key={track.id} onMouseDown={() => selectTrack(track)}
-                                        className="w-full px-3 py-2.5 text-left flex items-center justify-between transition-colors"
+                                    <div key={track.id}
+                                        className="group w-full px-3 py-2.5 flex items-center justify-between transition-colors"
                                         style={{ borderBottom: `1px solid ${C.border}` }}
                                         onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                        <div className="min-w-0 flex-1">
+                                        <button
+                                            onMouseDown={() => selectTrack(track)}
+                                            className="text-left min-w-0 flex-1"
+                                        >
                                             <p className="text-sm font-medium truncate" style={{ color: C.text }}>{track.track_name}</p>
                                             <p className="text-xs truncate" style={{ color: C.sub }}>{track.artist_name}{track.album_name && ` · ${track.album_name}`}</p>
-                                        </div>
+                                        </button>
                                         <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                            <button
+                                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); toggleSavedTrack(track); }}
+                                                className="text-base transition-opacity opacity-0 group-hover:opacity-100"
+                                                style={{ color: isSavedTrack(track.id) ? C.accent : C.sub }}
+                                                title={isSavedTrack(track.id) ? 'Remove from my list' : 'Save to my list'}
+                                            >
+                                                {isSavedTrack(track.id) ? '★' : '☆'}
+                                            </button>
                                             {track.has_synced_lyrics && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: C.bg, color: C.accent }}>synced</span>}
                                             {track.duration > 0 && <span className="text-xs" style={{ color: C.sub }}>{formatTime(track.duration)}</span>}
                                         </div>
-                                    </button>
+                                    </div>
                                 ))}
                             </motion.div>
                         )}
@@ -587,6 +508,20 @@ export default function App() {
                                     animate={{ opacity: 1, x: 0 }}
                                     className="flex items-center gap-3"
                                 >
+                                    <button
+                                        onClick={handleSpotifyClick}
+                                        disabled={spotifyLoading}
+                                        className="h-8 w-8 rounded-full flex items-center justify-center text-sm"
+                                        style={{
+                                            background: spotify.state.connected ? (spotify.state.playing ? '#1DB954' : C.card) : 'transparent',
+                                            color: spotify.state.connected ? (spotify.state.playing ? '#fff' : '#1DB954') : '#1DB954',
+                                            border: spotify.state.connected ? 'none' : '1px solid #1DB95440',
+                                            opacity: spotifyLoading ? 0.6 : 1,
+                                        }}
+                                        title={spotify.state.connected ? (spotify.state.playing ? 'Pause Spotify' : 'Play from Spotify') : 'Connect Spotify'}
+                                    >
+                                        {spotify.state.connected ? (spotify.state.playing ? '⏸' : '▶') : '♫'}
+                                    </button>
                                     <div className="flex flex-col">
                                         <span
                                             className="font-bold uppercase tracking-widest truncate"
@@ -602,6 +537,14 @@ export default function App() {
                                             <span style={{ color: C.sub, fontWeight: 400, fontSize: '13px' }}> · {currentTrack.artist}</span>
                                         </span>
                                     </div>
+                                    <button
+                                        onClick={handleCurrentTrackBookmark}
+                                        className="text-xl leading-none px-1"
+                                        style={{ color: isSavedTrack(currentTrack.id) ? C.accent : C.sub }}
+                                        title={isSavedTrack(currentTrack.id) ? 'Remove from my list' : 'Save to my list'}
+                                    >
+                                        {isSavedTrack(currentTrack.id) ? '★' : '☆'}
+                                    </button>
                                 </motion.div>
                             </AnimatePresence>
                         )}
