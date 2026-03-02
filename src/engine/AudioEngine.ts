@@ -58,14 +58,14 @@ export class AudioEngine {
      * @param segment - The word segment to play
      * @param typingDurationMs - How long the user took to type this word (ms)
      */
-    playWordSegment(segment: WordSegment, typingDurationMs: number): void {
+    playWordSegment(segment: WordSegment, typingDurationMs: number, baseRate = 1): void {
         if (!this.ctx || !this.buffer) return;
 
         // Stop any currently playing segment
         this.stopCurrent();
 
         const expectedDurationMs = segment.duration * 1000;
-        let rate = expectedDurationMs / typingDurationMs;
+        let rate = (expectedDurationMs / typingDurationMs) * baseRate;
 
         // Clamp playback rate between 0.5x and 1.75x
         rate = Math.max(0.5, Math.min(1.75, rate));
@@ -121,23 +121,24 @@ export class AudioEngine {
     onWordComplete(
         completedSegment: WordSegment,
         nextSegment: WordSegment | null,
-        typingDurationMs: number
+        typingDurationMs: number,
+        baseRate = 1
     ): void {
         if (!nextSegment) {
             this.stopCurrent();
             return;
         }
-        this.playWordSegment(nextSegment, typingDurationMs);
+        this.playWordSegment(nextSegment, typingDurationMs, baseRate);
     }
 
     /** Start playing from the first word at normal speed */
-    playFirstWord(segment: WordSegment): void {
+    playFirstWord(segment: WordSegment, baseRate = 1): void {
         if (!this.ctx || !this.buffer) return;
         this.stopCurrent();
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.buffer;
-        source.playbackRate.value = 1.0;
+        source.playbackRate.value = Math.max(0.5, Math.min(1.75, baseRate));
 
         const gain = this.ctx.createGain();
         const now = this.ctx.currentTime;
@@ -190,6 +191,11 @@ export class AudioEngine {
             this.currentGain = null;
         }
         this.isPlaying = false;
+    }
+
+    /** Public stop without destroying loaded buffer */
+    stop(): void {
+        this.stopCurrent();
     }
 
     /** Stop all playback and release resources */

@@ -155,8 +155,9 @@ export function useTypingEngine({
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (isComplete) return;
-        if (e.ctrlKey || e.metaKey || e.altKey) return;
         const key = e.key;
+        const isWordDeleteShortcut = key === 'Backspace' && (e.altKey || e.ctrlKey);
+        if ((e.ctrlKey || e.metaKey || e.altKey) && !isWordDeleteShortcut) return;
 
         // Start session on first keypress
         if (!sessionStartRef.current) {
@@ -186,6 +187,29 @@ export function useTypingEngine({
             const targetWord = currentWord.segment.word;
 
             if (key === 'Backspace') {
+                if (isWordDeleteShortcut && currentCharIndex > 0) {
+                    // Delete the entire current word (Option+Backspace on macOS / Ctrl+Backspace on Windows/Linux).
+                    const removedChars = currentWord.typedChars.length;
+                    let removedCorrectChars = 0;
+                    for (let i = 0; i < removedChars; i++) {
+                        if (currentWord.typedChars[i] === targetWord[i]) {
+                            removedCorrectChars++;
+                        }
+                    }
+
+                    totalCharsRef.current = Math.max(0, totalCharsRef.current - removedChars);
+                    correctCharsRef.current = Math.max(0, correctCharsRef.current - removedCorrectChars);
+
+                    const resetChars = Array(targetWord.length).fill('pending') as CharState[];
+                    resetChars[0] = 'current';
+                    currentWord.chars = resetChars;
+                    currentWord.typedChars = '';
+                    currentWord.startedAt = null;
+                    newStates[currentWordIndex] = currentWord;
+                    setCurrentCharIndex(0);
+                    return newStates;
+                }
+
                 if (currentCharIndex > 0) {
                     const newCharIdx = currentCharIndex - 1;
                     const newChars = [...currentWord.chars];
