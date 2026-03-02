@@ -158,6 +158,8 @@ export function useTypingEngine({
         const key = e.key;
         const isWordDeleteShortcut = key === 'Backspace' && (e.altKey || e.ctrlKey);
         if ((e.ctrlKey || e.metaKey || e.altKey) && !isWordDeleteShortcut) return;
+        const isTypingKey = key === 'Backspace' || key === ' ' || key.length === 1;
+        if (!isTypingKey) return;
 
         // Start session on first keypress
         if (!sessionStartRef.current) {

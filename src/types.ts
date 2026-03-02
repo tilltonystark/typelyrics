@@ -4,6 +4,7 @@ export interface TrackSearchResult {
     track_name: string;
     artist_name: string;
     album_name: string;
+    album_art?: string;
     duration: number; // seconds
     has_synced_lyrics: boolean;
     has_plain_lyrics: boolean;

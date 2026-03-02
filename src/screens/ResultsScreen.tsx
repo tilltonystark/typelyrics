@@ -2,13 +2,14 @@ import { motion } from 'framer-motion';
 import { SessionResult, TimerOption } from '../types';
 import { useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
+import { getSessions } from '../lib/analytics';
 
 const C = {
     bg: '#000000',
     sub: '#646669',
     text: '#d1d0c5',
     error: '#ca4754',
-    accent: '#e2b714',
+    accent: '#1DB954',
     card: '#111111',
     border: '#2a2a2a',
 };
@@ -142,6 +143,10 @@ function WpmChart({ history }: { history: { time: number; wpm: number; raw: numb
 
 
 export default function ResultsScreen({ result, user, onReplay, onNewSong }: ResultsScreenProps) {
+    const history = useMemo(() => {
+        return getSessions().slice().reverse();
+    }, [result.timestamp]);
+
     // Keyboard shortcuts on results screen
     const tabRef = useRef(false);
     useEffect(() => {
@@ -158,7 +163,7 @@ export default function ResultsScreen({ result, user, onReplay, onNewSong }: Res
     }, [onReplay, onNewSong]);
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: C.bg, color: C.text, fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
+        <div className="min-h-screen flex flex-col items-center justify-center px-8" style={{ background: C.bg, color: C.text, fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
 
             {/* Logo + user profile at the top */}
             <header className="absolute top-0 left-0 w-full px-8 py-5 flex items-center justify-between">
@@ -179,13 +184,13 @@ export default function ResultsScreen({ result, user, onReplay, onNewSong }: Res
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="w-full max-w-4xl"
+                className="w-full max-w-6xl"
             >
                 {/* Main section: WPM+ACC on left │ Graph+secondary stats on right */}
-                <div className="flex gap-10 items-start mb-8">
+                <div className="grid grid-cols-1 lg:grid-cols-[160px_minmax(0,700px)] gap-10 justify-center items-start mb-8">
 
                     {/* Left: Primary stats */}
-                    <div className="flex-shrink-0 w-40 flex flex-col gap-5">
+                    <div className="flex-shrink-0 w-40 flex flex-col gap-5 lg:justify-self-end">
                         <div>
                             <span className="text-sm block mb-1" style={{ color: C.sub }}>wpm</span>
                             <motion.span
@@ -207,12 +212,12 @@ export default function ResultsScreen({ result, user, onReplay, onNewSong }: Res
                     </div>
 
                     {/* Right: Graph + secondary stats below it */}
-                    <div className="flex-1 min-w-0 flex flex-col gap-4">
+                    <div className="w-full max-w-[700px] min-w-0 flex flex-col gap-4 lg:justify-self-start">
                         {/* Chart */}
                         <WpmChart history={result.wpmHistory} />
 
-                        {/* Secondary stats as horizontal row below chart */}
-                        <div className="flex gap-8" style={{ borderTop: `1px solid ${C.border}`, paddingTop: '10px' }}>
+                        {/* Secondary stats row matches chart width */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full" style={{ borderTop: `1px solid ${C.border}`, paddingTop: '10px' }}>
                             <div>
                                 <span className="text-xs block" style={{ color: C.sub }}>test type</span>
                                 <span className="text-base font-mono" style={{ color: C.text }}>{formatTimerLabel(result.timerOption)}</span>
@@ -252,6 +257,37 @@ export default function ResultsScreen({ result, user, onReplay, onNewSong }: Res
                         <span>new song</span>
                         <span className="text-[10px] opacity-60">esc / tab + space</span>
                     </button>
+                </div>
+
+                <div className="w-full max-w-[700px] mx-auto mt-10">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-semibold" style={{ color: C.text }}>history</h2>
+                        <span className="text-xs" style={{ color: C.sub }}>{history.length} sessions</span>
+                    </div>
+                    <div className="rounded overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                        <div className="grid grid-cols-[minmax(0,2fr)_90px_90px_90px_90px] px-3 py-2 text-[11px]" style={{ background: C.card, color: C.sub }}>
+                            <span>song</span>
+                            <span>mode</span>
+                            <span>wpm</span>
+                            <span>acc</span>
+                            <span>time</span>
+                        </div>
+                        {history.length === 0 ? (
+                            <div className="px-3 py-4 text-xs" style={{ color: C.sub }}>No sessions yet.</div>
+                        ) : history.map((session, idx) => (
+                            <div
+                                key={`${session.timestamp}-${idx}`}
+                                className="grid grid-cols-[minmax(0,2fr)_90px_90px_90px_90px] px-3 py-2 text-xs"
+                                style={{ borderTop: idx === 0 ? 'none' : `1px solid ${C.border}`, color: C.text }}
+                            >
+                                <span className="truncate">{session.trackName} · {session.artistName}</span>
+                                <span>{formatTimerLabel(session.timerOption)}</span>
+                                <span>{session.avgWpm}</span>
+                                <span>{session.accuracy}%</span>
+                                <span>{Math.round(session.elapsedMs / 1000)}s</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </motion.div>
         </div>

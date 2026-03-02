@@ -25,7 +25,7 @@ interface SpotifyPlayerState {
 interface UseSpotifyPlayerReturn {
     state: SpotifyPlayerState;
     connect: () => void;
-    play: (spotifyUri: string) => Promise<void>;
+    play: (spotifyUri: string, positionMs?: number) => Promise<void>;
     pause: () => void;
     resume: () => void;
     seek: (positionMs: number) => void;
@@ -163,7 +163,7 @@ export function useSpotifyPlayer(): UseSpotifyPlayerReturn {
         window.location.href = '/auth/spotify';
     }, []);
 
-    const play = useCallback(async (spotifyUri: string) => {
+    const play = useCallback(async (spotifyUri: string, positionMs = 0) => {
         if (!state.deviceId || !tokenRef.current) return;
         try {
             await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${state.deviceId}`, {
@@ -172,7 +172,10 @@ export function useSpotifyPlayer(): UseSpotifyPlayerReturn {
                     'Authorization': `Bearer ${tokenRef.current}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ uris: [spotifyUri] }),
+                body: JSON.stringify({
+                    uris: [spotifyUri],
+                    ...(positionMs > 0 ? { position_ms: positionMs } : {}),
+                }),
             });
         } catch (err) {
             console.error('Play failed:', err);
